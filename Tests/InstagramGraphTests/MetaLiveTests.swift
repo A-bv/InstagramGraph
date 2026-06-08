@@ -81,6 +81,32 @@ final class MetaLiveTests: XCTestCase {
         XCTAssertFalse(media.isEmpty, "Expected hashtag search to return at least one media item.")
     }
 
+    func testExpensiveCaptionProbeAgainstMeta() throws {
+        guard environment["META_RUN_EXPENSIVE_CAPTION_PROBE"] == "1" else {
+            throw XCTSkip("Set META_RUN_EXPENSIVE_CAPTION_PROBE=1 to reproduce Meta's caption page-size failure.")
+        }
+
+        let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
+        let instagramBusinessId = try requiredEnvironmentValue("META_IG_BUSINESS_ID")
+        let hashtag = try requiredEnvironmentValue("META_TEST_HASHTAG")
+        let version = graphAPIVersion
+        let searchURL = "https://graph.facebook.com/\(version)/ig_hashtag_search?user_id=\(instagramBusinessId)&q=\(hashtag)&access_token=\(token)"
+        let searchData = try fetchGraphData(from: searchURL, version: version)
+        let hashtagResponse = try JSONDecoder().decode(HashtagIdResponse.self, from: searchData)
+        let hashtagID = try XCTUnwrap(hashtagResponse.data.first?.id)
+        let fields = "id,caption"
+        let probeURL = "https://graph.facebook.com/\(version)/\(hashtagID)/top_media?fields=\(fields)&user_id=\(instagramBusinessId)&limit=10&access_token=\(token)"
+
+        XCTAssertThrowsError(try fetchGraphData(from: probeURL, version: version)) { error in
+            guard case InstagramGraphServiceError.graphHTTPError(let statusCode, let body) = error else {
+                XCTFail("Expected graphHTTPError, got \(error)")
+                return
+            }
+            XCTAssertEqual(statusCode, 500)
+            XCTAssertTrue(body.contains("Please reduce the amount of data"))
+        }
+    }
+
     private var graphAPIVersion: String {
         environment["META_GRAPH_VERSION"] ?? ConnectedInsightsConfiguration.production.graphAPIVersion
     }
