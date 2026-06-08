@@ -27,6 +27,7 @@ public struct InstagramGraphEndpointBuilder {
             "comments_count",
             "like_count",
             "media_type",
+            "media_url",
             "timestamp",
             "id"
         ].joined(separator: ",")

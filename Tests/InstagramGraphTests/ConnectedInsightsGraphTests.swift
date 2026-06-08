@@ -117,10 +117,10 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertTrue(url.contains("comments_count"))
         XCTAssertTrue(url.contains("like_count"))
         XCTAssertTrue(url.contains("media_type"))
+        XCTAssertTrue(url.contains("media_url"))
         XCTAssertTrue(url.contains("timestamp"))
         XCTAssertTrue(url.contains("user_id=1789"))
         XCTAssertTrue(url.contains("limit=10"))
-        XCTAssertFalse(url.contains("media_url"))
         // media_product_type is not a valid top_media field in the production Graph API version.
         XCTAssertFalse(url.contains("media_product_type"))
     }
