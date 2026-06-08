@@ -20,7 +20,7 @@ public struct InstagramGraphEndpointBuilder {
         hashtagID: String,
         credentials: InstagramGraphCredentials
     ) -> String? {
-        let limit = "10"
+        let limit = "5"
         let mediaType = "top_media"
         let fields = [
             "caption",
