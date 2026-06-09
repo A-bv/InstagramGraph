@@ -5,6 +5,10 @@ public protocol InstagramGraphCredentialsProviding {
     var instagramBusinessAccountId: String? { get }
 }
 
+public protocol InstagramGraphAccessTokenProviding {
+    var facebookToken: String? { get }
+}
+
 public struct InstagramGraphCredentials {
     public let facebookToken: String
     public let instagramBusinessAccountId: String
@@ -32,13 +36,18 @@ public struct StaticInstagramGraphCredentialsProvider: InstagramGraphCredentials
 
 public final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding {
     private let settings: any ConnectedInsightsSettingsProtocol
+    private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
 
-    public init(settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings()) {
+    public init(
+        settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings(),
+        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
+    ) {
         self.settings = settings
+        self.tokenProvider = tokenProvider
     }
 
     public var facebookToken: String? {
-        settings.facebookToken
+        tokenProvider?.facebookToken ?? settings.facebookToken
     }
 
     public var instagramBusinessAccountId: String? {

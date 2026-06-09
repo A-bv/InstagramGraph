@@ -60,25 +60,32 @@ public protocol ConnectedInsightsGatewayProtocol {
     var profileProvider: any ProfileDataProviding { get }
 
     func accessState() -> ConnectedInsightsAccessState
+    func setup(facebookToken: String, completion: @escaping (Result<Void, Error>) -> Void)
     func setup(facebookToken: String, completion: @escaping (Bool) -> Void)
     func reset()
 }
 
 public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private var settings: any ConnectedInsightsSettingsProtocol
+    private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
     public let hashtagProvider: any HashtagSearchProviding
     public let profileProvider: any ProfileDataProviding
     private let accountResolver: InstagramGraphAccountResolver
 
     public convenience init(
         settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings(),
-        configuration: ConnectedInsightsConfiguration = .production
+        configuration: ConnectedInsightsConfiguration = .production,
+        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
-        let credentialsProvider = SettingsInstagramGraphCredentialsProvider(settings: settings)
+        let credentialsProvider = SettingsInstagramGraphCredentialsProvider(
+            settings: settings,
+            tokenProvider: tokenProvider
+        )
         let endpointBuilder = InstagramGraphEndpointBuilder(apiGraphVersion: configuration.graphAPIVersion)
         let client = InstagramGraphClient(apiGraphVersion: configuration.graphAPIVersion)
         self.init(
             settings: settings,
+            tokenProvider: tokenProvider,
             hashtagProvider: InstagramHashtagRepository(
                 credentialsProvider: credentialsProvider,
                 endpointBuilder: endpointBuilder,
@@ -95,28 +102,40 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
 
     public init(
         settings: any ConnectedInsightsSettingsProtocol,
+        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil,
         hashtagProvider: any HashtagSearchProviding,
         profileProvider: any ProfileDataProviding,
         accountResolver: InstagramGraphAccountResolver = InstagramGraphAccountResolver()
     ) {
         self.settings = settings
+        self.tokenProvider = tokenProvider
         self.hashtagProvider = hashtagProvider
         self.profileProvider = profileProvider
         self.accountResolver = accountResolver
     }
 
-    public func setup(facebookToken: String, completion: @escaping (Bool) -> Void) {
-        settings.facebookToken = facebookToken
+    public func setup(facebookToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
         accountResolver.resolveAccount(facebookToken: facebookToken) { [weak self] result in
             guard let self else { return }
             switch result {
             case .success(let account):
                 self.settings.instagramBusinessAccountId = account.instagramBusinessAccountId
                 self.settings.isCorrectSetup = true
-                completion(true)
+                completion(.success(()))
             case .failure(let error):
                 print("[ConnectedInsights][Setup] Account resolution failed: \(error.localizedDescription)")
                 self.settings.isCorrectSetup = false
+                completion(.failure(error))
+            }
+        }
+    }
+
+    public func setup(facebookToken: String, completion: @escaping (Bool) -> Void) {
+        setup(facebookToken: facebookToken) { result in
+            switch result {
+            case .success:
+                completion(true)
+            case .failure:
                 completion(false)
             }
         }
@@ -133,7 +152,9 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
             return .needsSetup(.setupRequired)
         }
 
-        guard let facebookToken = settings.facebookToken, !facebookToken.isEmpty else {
+        guard let facebookToken = tokenProvider?.facebookToken ?? settings.facebookToken,
+              !facebookToken.isEmpty
+        else {
             return .needsSetup(.missingFacebookToken)
         }
 

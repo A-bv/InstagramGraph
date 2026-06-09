@@ -21,6 +21,26 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         assertNeedsSetup(sut.accessState(), .missingFacebookToken)
     }
 
+    func testAccessState_whenTokenProviderHasToken_isReadyWithoutStoredToken() {
+        let settings = FakeConnectedInsightsSettings(
+            isCorrectSetup: true,
+            facebookToken: nil,
+            instagramBusinessAccountId: "ig-business-id"
+        )
+        let sut = makeGateway(
+            settings: settings,
+            tokenProvider: FakeAccessTokenProvider(facebookToken: "provider-token")
+        )
+
+        switch sut.accessState() {
+        case .ready(let session):
+            XCTAssertEqual(session.facebookToken, "provider-token")
+            XCTAssertEqual(session.instagramBusinessAccountId, "ig-business-id")
+        case .needsSetup(let error):
+            XCTFail("Expected ready state, got setup error: \(error)")
+        }
+    }
+
     func testAccessState_whenInstagramBusinessIdIsMissing_requiresInstagramBusinessId() {
         let settings = FakeConnectedInsightsSettings(
             isCorrectSetup: true,
@@ -59,6 +79,22 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         let credentials = try sut.validCredentials().get()
 
         XCTAssertEqual(credentials.facebookToken, "facebook-token")
+        XCTAssertEqual(credentials.instagramBusinessAccountId, "ig-business-id")
+    }
+
+    func testCredentialsProvider_whenTokenProviderHasToken_doesNotRequireStoredToken() throws {
+        let settings = FakeConnectedInsightsSettings(
+            facebookToken: nil,
+            instagramBusinessAccountId: "ig-business-id"
+        )
+        let sut = SettingsInstagramGraphCredentialsProvider(
+            settings: settings,
+            tokenProvider: FakeAccessTokenProvider(facebookToken: "provider-token")
+        )
+
+        let credentials = try sut.validCredentials().get()
+
+        XCTAssertEqual(credentials.facebookToken, "provider-token")
         XCTAssertEqual(credentials.instagramBusinessAccountId, "ig-business-id")
     }
 
@@ -178,6 +214,72 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         case nil:
             XCTFail("Expected resolver result")
         }
+    }
+
+    func testGatewaySetup_whenAccountResolutionSucceedsStoresOnlyInstagramAccount() throws {
+        let response = """
+        {
+          "data": [
+            {
+              "id": "page-id",
+              "instagram_business_account": {
+                "id": "ig-business-id"
+              }
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let settings = FakeConnectedInsightsSettings()
+        let client = FakeInstagramGraphClient(responses: [.success(response)])
+        let sut = ConnectedInsightsGateway(
+            settings: settings,
+            tokenProvider: FakeAccessTokenProvider(facebookToken: "provider-token"),
+            hashtagProvider: FakeHashtagProvider(),
+            profileProvider: FakeProfileProvider(),
+            accountResolver: InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
+        )
+        let expectation = expectation(description: "setup completes")
+        var receivedResult: Result<Void, Error>?
+
+        sut.setup(facebookToken: "setup-token") { result in
+            receivedResult = result
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 1)
+        XCTAssertNoThrow(try receivedResult?.get())
+        XCTAssertNil(settings.facebookToken)
+        XCTAssertEqual(settings.instagramBusinessAccountId, "ig-business-id")
+        XCTAssertTrue(settings.isCorrectSetup)
+    }
+
+    func testGatewaySetup_whenAccountResolutionFailsReturnsError() {
+        let settings = FakeConnectedInsightsSettings()
+        let client = FakeInstagramGraphClient(responses: [.failure(InstagramGraphServiceError.instagramAccountNotFound)])
+        let sut = ConnectedInsightsGateway(
+            settings: settings,
+            tokenProvider: FakeAccessTokenProvider(facebookToken: "provider-token"),
+            hashtagProvider: FakeHashtagProvider(),
+            profileProvider: FakeProfileProvider(),
+            accountResolver: InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
+        )
+        let expectation = expectation(description: "setup completes")
+        var receivedError: Error?
+
+        sut.setup(facebookToken: "setup-token") { result in
+            if case .failure(let error) = result { receivedError = error }
+            expectation.fulfill()
+        }
+
+        wait(for: [expectation], timeout: 1)
+        guard let serviceError = receivedError as? InstagramGraphServiceError,
+              case .instagramAccountNotFound = serviceError else {
+            XCTFail("Expected instagramAccountNotFound, got \(String(describing: receivedError))")
+            return
+        }
+        XCTAssertNil(settings.facebookToken)
+        XCTAssertNil(settings.instagramBusinessAccountId)
+        XCTAssertFalse(settings.isCorrectSetup)
     }
 
     func testEndpointBuilder_buildsEncodedHashtagSearchURL() throws {
@@ -430,10 +532,12 @@ final class ConnectedInsightsGraphTests: XCTestCase {
     }
 
     private func makeGateway(
-        settings: FakeConnectedInsightsSettings
+        settings: FakeConnectedInsightsSettings,
+        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) -> ConnectedInsightsGateway {
         ConnectedInsightsGateway(
             settings: settings,
+            tokenProvider: tokenProvider,
             hashtagProvider: FakeHashtagProvider(),
             profileProvider: FakeProfileProvider()
         )
@@ -479,6 +583,10 @@ private final class FakeConnectedInsightsSettings: ConnectedInsightsSettingsProt
 private struct FakeInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding {
     let facebookToken: String?
     let instagramBusinessAccountId: String?
+}
+
+private struct FakeAccessTokenProvider: InstagramGraphAccessTokenProviding {
+    let facebookToken: String?
 }
 
 private final class FakeInstagramGraphClient: InstagramGraphClientProtocol {
