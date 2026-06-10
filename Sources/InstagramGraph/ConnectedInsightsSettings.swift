@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol ConnectedInsightsSettingsProtocol {
+public protocol ConnectedInsightsSettingsProtocol: Sendable {
     var isCorrectSetup: Bool { get set }
     var facebookToken: String? { get set }
     var instagramBusinessAccountId: String? { get set }
@@ -16,7 +16,7 @@ public struct ConnectedInsightsConfiguration {
     public static let production = ConnectedInsightsConfiguration(graphAPIVersion: "v23.0")
 }
 
-public final class UserDefaultsConnectedInsightsSettings: ConnectedInsightsSettingsProtocol {
+public final class UserDefaultsConnectedInsightsSettings: ConnectedInsightsSettingsProtocol, @unchecked Sendable {
     private enum Key {
         static let isCorrectSetup = "isCorrectSetup"
         static let facebookToken = "fbToken"

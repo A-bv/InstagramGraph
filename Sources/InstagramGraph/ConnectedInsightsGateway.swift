@@ -36,11 +36,11 @@ public enum ConnectedInsightsAccessState {
     case needsSetup(ConnectedInsightsError)
 }
 
-public protocol HashtagSearchProviding {
+public protocol HashtagSearchProviding: Sendable {
     func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
 }
 
-public protocol ProfileDataProviding {
+public protocol ProfileDataProviding: Sendable {
     func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
@@ -50,6 +50,7 @@ public extension ProfileDataProviding {
     }
 }
 
+@MainActor
 public protocol ConnectedInsightsGatewayProtocol {
     var hashtagProvider: any HashtagSearchProviding { get }
     var profileProvider: any ProfileDataProviding { get }
@@ -59,6 +60,7 @@ public protocol ConnectedInsightsGatewayProtocol {
     func reset()
 }
 
+@MainActor
 public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private var settings: any ConnectedInsightsSettingsProtocol
     private let tokenProvider: (any InstagramGraphAccessTokenProviding)?

@@ -1,6 +1,6 @@
 import Foundation
 
-public struct InstagramGraphEndpointBuilder {
+public struct InstagramGraphEndpointBuilder: Sendable {
     private let apiGraphVersion: String
     private let baseURL = "https://graph.facebook.com"
 

@@ -30,11 +30,11 @@ public enum InstagramGraphServiceError: LocalizedError {
     }
 }
 
-public protocol InstagramGraphClientProtocol {
+public protocol InstagramGraphClientProtocol: Sendable {
     func fetchGraphData(from urlString: String) async throws -> Data
 }
 
-public final class InstagramGraphClient: InstagramGraphClientProtocol {
+public final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable {
     private let apiGraphVersion: String
     private let session: URLSession
 

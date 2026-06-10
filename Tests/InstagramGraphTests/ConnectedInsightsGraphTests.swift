@@ -1,6 +1,7 @@
 import XCTest
 @testable import InstagramGraph
 
+@MainActor
 final class ConnectedInsightsGraphTests: XCTestCase {
     private let productionGraphAPIVersion = ConnectedInsightsConfiguration.production.graphAPIVersion
 
@@ -442,8 +443,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
                 instagramBusinessAccountId: "ig-business-id"
             ),
             endpointBuilder: InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion),
-            client: client,
-            onDataFetched: { _ in }
+            client: client
         )
 
         do {
@@ -501,7 +501,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
     }
 }
 
-private final class FakeConnectedInsightsSettings: ConnectedInsightsSettingsProtocol {
+private final class FakeConnectedInsightsSettings: ConnectedInsightsSettingsProtocol, @unchecked Sendable {
     var isCorrectSetup: Bool
     var facebookToken: String?
     var instagramBusinessAccountId: String?
@@ -526,7 +526,7 @@ private struct FakeAccessTokenProvider: InstagramGraphAccessTokenProviding {
     let facebookToken: String?
 }
 
-private final class FakeInstagramGraphClient: InstagramGraphClientProtocol {
+private final class FakeInstagramGraphClient: InstagramGraphClientProtocol, @unchecked Sendable {
     private var responses: [Result<Data, Error>]
     private(set) var requestedURLs: [String] = []
 

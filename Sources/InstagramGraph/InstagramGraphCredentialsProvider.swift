@@ -1,12 +1,12 @@
 import Foundation
 
-public protocol InstagramGraphCredentialsProviding {
+public protocol InstagramGraphCredentialsProviding: Sendable {
     var facebookToken: String? { get }
     var instagramBusinessAccountId: String? { get }
     func validCredentials() -> Result<InstagramGraphCredentials, Error>
 }
 
-public protocol InstagramGraphAccessTokenProviding {
+public protocol InstagramGraphAccessTokenProviding: Sendable {
     var facebookToken: String? { get }
 }
 
@@ -35,7 +35,7 @@ public struct StaticInstagramGraphCredentialsProvider: InstagramGraphCredentials
     }
 }
 
-public final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding {
+public final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding, Sendable {
     private let settings: any ConnectedInsightsSettingsProtocol
     private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
 

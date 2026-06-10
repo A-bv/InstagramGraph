@@ -4,7 +4,7 @@ public protocol InstagramHashtagRepositoryProtocol: HashtagSearchProviding {
     func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
 }
 
-public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol {
+public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Sendable {
     private let credentialsProvider: any InstagramGraphCredentialsProviding
     private let endpointBuilder: InstagramGraphEndpointBuilder
     private let client: any InstagramGraphClientProtocol

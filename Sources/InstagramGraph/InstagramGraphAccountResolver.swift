@@ -19,7 +19,7 @@ public struct InstagramGraphResolvedAccount {
     }
 }
 
-public final class InstagramGraphAccountResolver {
+public final class InstagramGraphAccountResolver: Sendable {
     private let apiGraphVersion: String
     private let client: any InstagramGraphClientProtocol
 
