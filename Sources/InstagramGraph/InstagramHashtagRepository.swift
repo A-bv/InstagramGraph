@@ -40,16 +40,22 @@ public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtoco
         for url: String,
         completion: @escaping (Result<[DataMedia], Error>) -> Void
     ) {
-        fetchDecodedData(of: Media.self, from: url) { result in
+        client.fetchGraphData(from: url) { result in
             switch result {
             case .failure(let error):
+                InstagramGraphLogger.logFailure(error, url: url)
                 completion(.failure(error))
             case .success(let data):
-                guard let dataMedia = data as? [DataMedia] else {
-                    completion(.failure(InstagramGraphServiceError.unexpectedResponse))
+                guard let media = try? JSONDecoder().decode(Media.self, from: data) else {
+                    let error = InstagramGraphServiceError.decodingFailed(
+                        type: String(describing: Media.self),
+                        body: InstagramGraphLogger.responsePreview(data)
+                    )
+                    InstagramGraphLogger.logFailure(error, url: url)
+                    completion(.failure(error))
                     return
                 }
-                completion(.success(dataMedia))
+                completion(.success(media.data.compactMap { $0 }))
             }
         }
     }
@@ -109,53 +115,4 @@ public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtoco
         }
     }
 
-    private func fetchDecodedData<T: Decodable>(
-        of type: T.Type,
-        from url: String,
-        completion: @escaping (Result<Any, Error>) -> Void
-    ) {
-        client.fetchGraphData(from: url) { result in
-            switch result {
-            case .failure(let error):
-                InstagramGraphLogger.logFailure(error, url: url)
-                completion(.failure(error))
-            case .success(let data):
-                self.handleSuccessResult(of: T.self, data: data, sourceURL: url, completion: completion)
-            }
-        }
-    }
-
-    private func handleSuccessResult<T: Decodable>(
-        of type: T.Type,
-        data: Data,
-        sourceURL: String,
-        completion: @escaping (Result<Any, Error>) -> Void
-    ) {
-        if T.self == Media.self {
-            guard let decodedMedia = try? JSONDecoder().decode(Media.self, from: data) else {
-                completion(.failure(decodingError(for: T.self, data: data, sourceURL: sourceURL)))
-                return
-            }
-            completion(.success(decodedMedia.data.compactMap { $0 }))
-        } else {
-            guard let decodedObject = try? JSONDecoder().decode([T].self, from: data) else {
-                completion(.failure(decodingError(for: T.self, data: data, sourceURL: sourceURL)))
-                return
-            }
-            completion(.success(decodedObject))
-        }
-    }
-
-    private func decodingError<T: Decodable>(
-        for type: T.Type,
-        data: Data,
-        sourceURL: String
-    ) -> Error {
-        let error = InstagramGraphServiceError.decodingFailed(
-            type: String(describing: type),
-            body: InstagramGraphLogger.responsePreview(data)
-        )
-        InstagramGraphLogger.logFailure(error, url: sourceURL)
-        return error
-    }
 }
