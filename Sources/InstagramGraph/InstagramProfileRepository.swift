@@ -30,7 +30,7 @@ final class InstagramProfileRepository: InstagramProfileRepositoryProtocol, Send
 
         let data = try await client.fetchGraphData(from: encodedUrl)
 
-        guard let profile = try? JSONDecoder().decode(Profile.self, from: data) else {
+        guard let profile = try? JSONDecoder.instagram().decode(Profile.self, from: data) else {
             let error = InstagramGraphServiceError.decodingFailed(
                 type: String(describing: Profile.self),
                 body: InstagramGraphLogger.responsePreview(data)

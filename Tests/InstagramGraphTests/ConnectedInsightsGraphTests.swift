@@ -522,7 +522,7 @@ private final class FakeInstagramGraphClient: InstagramGraphClientProtocol, @unc
 }
 
 private struct FakeHashtagProvider: HashtagSearchProviding {
-    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+    func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
         return []
     }
 }

@@ -71,7 +71,6 @@ struct InstagramGraphEndpointBuilder: Sendable {
             "profile_picture_url",
             "username",
             "website",
-            "recently_searched_hashtags",
             mediaField
         ]
 

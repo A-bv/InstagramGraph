@@ -37,7 +37,7 @@ public enum ConnectedInsightsAccessState {
 }
 
 public protocol HashtagSearchProviding: Sendable {
-    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
+    func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost]
 }
 
 public protocol ProfileDataProviding: Sendable {
@@ -112,7 +112,7 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
         self.accountResolver = accountResolver
     }
 
-    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+    public func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
         try await hashtagProvider.searchHashtag(searchedHashtag: searchedHashtag)
     }
 
@@ -165,7 +165,7 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
 public struct UnavailableHashtagProvider: HashtagSearchProviding {
     public init() {}
 
-    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+    public func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
         throw ConnectedInsightsError.dataProviderUnavailable
     }
 }

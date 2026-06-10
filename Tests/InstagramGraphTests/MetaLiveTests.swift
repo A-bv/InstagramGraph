@@ -55,7 +55,7 @@ final class MetaLiveTests: XCTestCase {
         ))
 
         let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
-        XCTAssertNoThrow(try JSONDecoder().decode(Profile.self, from: data))
+        XCTAssertNoThrow(try JSONDecoder.instagram().decode(Profile.self, from: data))
     }
 
     func testHashtagSearchAgainstMeta() async throws {

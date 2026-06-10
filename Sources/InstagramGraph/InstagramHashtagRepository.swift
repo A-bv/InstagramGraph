@@ -1,7 +1,7 @@
 import Foundation
 
 protocol InstagramHashtagRepositoryProtocol: HashtagSearchProviding {
-    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
+    func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost]
 }
 
 final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Sendable {
@@ -19,7 +19,7 @@ final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Send
         self.client = client
     }
 
-    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+    func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
         let mediaSearchURL = try await findHashtagURL(searchedHashtag: searchedHashtag)
         return try await getMedia(for: mediaSearchURL)
     }
@@ -57,9 +57,9 @@ final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Send
         return mediaSearchURL
     }
 
-    private func getMedia(for url: String) async throws -> [DataMedia] {
+    private func getMedia(for url: String) async throws -> [InstagramPost] {
         let data = try await client.fetchGraphData(from: url)
-        guard let media = try? JSONDecoder().decode(Media.self, from: data) else {
+        guard let media = try? JSONDecoder.instagram().decode(Media.self, from: data) else {
             let error = InstagramGraphServiceError.decodingFailed(
                 type: String(describing: Media.self),
                 body: InstagramGraphLogger.responsePreview(data)
