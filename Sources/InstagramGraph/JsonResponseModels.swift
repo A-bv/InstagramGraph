@@ -5,7 +5,7 @@ public struct Profile: Hashable, Decodable {
     public let name: String?
     public let followersCount: Int?
     public let followsCount: Int?
-    public let id: String?
+    public let id: String
     public let mediaCount: Int?
     public let profilePictureUrl: String?
     public let username: String?
