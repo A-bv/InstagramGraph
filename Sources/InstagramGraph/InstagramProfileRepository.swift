@@ -1,10 +1,7 @@
 import Foundation
 
 public protocol InstagramProfileRepositoryProtocol: ProfileDataProviding {
-    func loadProfileForAnalytics(
-        mediaLimit: Int?,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    )
+    func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
 public final class InstagramProfileRepository: InstagramProfileRepositoryProtocol {
@@ -25,50 +22,27 @@ public final class InstagramProfileRepository: InstagramProfileRepositoryProtoco
         self.onDataFetched = onDataFetched
     }
 
-    public func loadProfileForAnalytics(
-        mediaLimit: Int? = nil,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    ) {
-        switch credentialsProvider.validCredentials() {
-        case .failure(let error):
-            InstagramGraphLogger.logFailure(error, url: "credentials check")
-            completion(.failure(error))
-        case .success(let credentials):
-            guard let encodedUrl = endpointBuilder.analyticsProfileURL(
-                mediaLimit: mediaLimit,
-                credentials: credentials
-            ) else {
-                completion(.failure(InstagramGraphServiceError.invalidURL("analytics profile")))
-                return
-            }
-            fetchProfile(from: encodedUrl) { result in
-                completion(result)
-            }
+    public func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
+        let credentials = try credentialsProvider.validCredentials().get()
+        guard let encodedUrl = endpointBuilder.analyticsProfileURL(
+            mediaLimit: mediaLimit,
+            credentials: credentials
+        ) else {
+            throw InstagramGraphServiceError.invalidURL("analytics profile")
         }
-    }
 
-    private func fetchProfile(
-        from url: String,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    ) {
-        client.fetchGraphData(from: url) { result in
-            switch result {
-            case .failure(let error):
-                InstagramGraphLogger.logFailure(error, url: url)
-                completion(.failure(error))
-            case .success(let data):
-                guard let profile = try? JSONDecoder().decode(Profile.self, from: data) else {
-                    let error = InstagramGraphServiceError.decodingFailed(
-                        type: String(describing: Profile.self),
-                        body: InstagramGraphLogger.responsePreview(data)
-                    )
-                    InstagramGraphLogger.logFailure(error, url: url)
-                    completion(.failure(error))
-                    return
-                }
-                self.onDataFetched?(data)
-                completion(.success(profile))
-            }
+        let data = try await client.fetchGraphData(from: encodedUrl)
+
+        guard let profile = try? JSONDecoder().decode(Profile.self, from: data) else {
+            let error = InstagramGraphServiceError.decodingFailed(
+                type: String(describing: Profile.self),
+                body: InstagramGraphLogger.responsePreview(data)
+            )
+            InstagramGraphLogger.logFailure(error, url: encodedUrl)
+            throw error
         }
+
+        onDataFetched?(data)
+        return profile
     }
 }

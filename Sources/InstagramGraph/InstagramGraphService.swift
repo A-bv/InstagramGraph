@@ -1,15 +1,8 @@
 import Foundation
 
 public protocol InstagramGraphServicing: HashtagSearchProviding, ProfileDataProviding {
-    func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    )
-
-    func loadProfileForAnalytics(
-        mediaLimit: Int?,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    )
+    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
+    func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
 public final class InstagramGraphService: InstagramGraphServicing {
@@ -76,18 +69,12 @@ public final class InstagramGraphService: InstagramGraphServicing {
         self.profileRepository = profileRepository
     }
 
-    public func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    ) {
-        hashtagRepository.searchHashtag(searchedHashtag: searchedHashtag, completion: completion)
+    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+        try await hashtagRepository.searchHashtag(searchedHashtag: searchedHashtag)
     }
 
-    public func loadProfileForAnalytics(
-        mediaLimit: Int? = nil,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    ) {
-        profileRepository.loadProfileForAnalytics(mediaLimit: mediaLimit, completion: completion)
+    public func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
+        try await profileRepository.loadProfileForAnalytics(mediaLimit: mediaLimit)
     }
 
     public func businessDiscoveryURL(account: String) -> String? {

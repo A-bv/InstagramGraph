@@ -118,7 +118,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         }
     }
 
-    func testAccountResolver_resolvesFirstPageWithInstagramAccount() throws {
+    func testAccountResolver_resolvesFirstPageWithInstagramAccount() async throws {
         let response = """
         {
           "data": [
@@ -136,16 +136,9 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         """.data(using: .utf8)!
         let client = FakeInstagramGraphClient(responses: [.success(response)])
         let sut = InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
-        let expectation = expectation(description: "Resolve account")
-        var receivedResult: Result<InstagramGraphResolvedAccount, Error>?
 
-        sut.resolveAccount(facebookToken: "facebook-token") { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
+        let account = try await sut.resolveAccount(facebookToken: "facebook-token")
 
-        wait(for: [expectation], timeout: 1)
-        let account = try XCTUnwrap(receivedResult).get()
         XCTAssertEqual(account.facebookPageId, "page-id")
         XCTAssertEqual(account.facebookPageName, "PackTags")
         XCTAssertEqual(account.instagramBusinessAccountId, "ig-business-id")
@@ -155,7 +148,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertTrue(client.requestedURLs[0].contains("access_token=facebook-token"))
     }
 
-    func testAccountResolver_resolveCredentialsBuildsServiceCredentials() throws {
+    func testAccountResolver_resolveCredentialsBuildsServiceCredentials() async throws {
         let response = """
         {
           "data": [
@@ -170,21 +163,14 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         """.data(using: .utf8)!
         let client = FakeInstagramGraphClient(responses: [.success(response)])
         let sut = InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
-        let expectation = expectation(description: "Resolve credentials")
-        var receivedResult: Result<InstagramGraphCredentials, Error>?
 
-        sut.resolveCredentials(facebookToken: "facebook-token") { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
+        let credentials = try await sut.resolveCredentials(facebookToken: "facebook-token")
 
-        wait(for: [expectation], timeout: 1)
-        let credentials = try XCTUnwrap(receivedResult).get()
         XCTAssertEqual(credentials.facebookToken, "facebook-token")
         XCTAssertEqual(credentials.instagramBusinessAccountId, "ig-business-id")
     }
 
-    func testAccountResolver_whenNoPageHasInstagramAccountReturnsMissingCredentials() {
+    func testAccountResolver_whenNoPageHasInstagramAccountReturnsMissingCredentials() async throws {
         let response = """
         {
           "data": [
@@ -194,29 +180,19 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         """.data(using: .utf8)!
         let client = FakeInstagramGraphClient(responses: [.success(response)])
         let sut = InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
-        let expectation = expectation(description: "Resolve account failure")
-        var receivedResult: Result<InstagramGraphResolvedAccount, Error>?
 
-        sut.resolveAccount(facebookToken: "facebook-token") { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 1)
-        switch receivedResult {
-        case .success:
-            XCTFail("Expected missing credentials error")
-        case .failure(let error):
-            guard case InstagramGraphServiceError.instagramAccountNotFound = error else {
+        do {
+            _ = try await sut.resolveAccount(facebookToken: "facebook-token")
+            XCTFail("Expected instagramAccountNotFound error")
+        } catch let error as InstagramGraphServiceError {
+            guard case .instagramAccountNotFound = error else {
                 XCTFail("Expected instagramAccountNotFound error, got \(error)")
                 return
             }
-        case nil:
-            XCTFail("Expected resolver result")
         }
     }
 
-    func testGatewaySetup_whenAccountResolutionSucceedsStoresOnlyInstagramAccount() throws {
+    func testGatewaySetup_whenAccountResolutionSucceedsStoresOnlyInstagramAccount() async throws {
         let response = """
         {
           "data": [
@@ -238,22 +214,15 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             profileProvider: FakeProfileProvider(),
             accountResolver: InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
         )
-        let expectation = expectation(description: "setup completes")
-        var receivedResult: Result<Void, Error>?
 
-        sut.setup(facebookToken: "setup-token") { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
+        try await sut.setup(facebookToken: "setup-token")
 
-        wait(for: [expectation], timeout: 1)
-        XCTAssertNoThrow(try receivedResult?.get())
         XCTAssertNil(settings.facebookToken)
         XCTAssertEqual(settings.instagramBusinessAccountId, "ig-business-id")
         XCTAssertTrue(settings.isCorrectSetup)
     }
 
-    func testGatewaySetup_whenAccountResolutionFailsReturnsError() {
+    func testGatewaySetup_whenAccountResolutionFailsReturnsError() async throws {
         let settings = FakeConnectedInsightsSettings()
         let client = FakeInstagramGraphClient(responses: [.failure(InstagramGraphServiceError.instagramAccountNotFound)])
         let sut = ConnectedInsightsGateway(
@@ -263,20 +232,17 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             profileProvider: FakeProfileProvider(),
             accountResolver: InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
         )
-        let expectation = expectation(description: "setup completes")
-        var receivedError: Error?
 
-        sut.setup(facebookToken: "setup-token") { result in
-            if case .failure(let error) = result { receivedError = error }
-            expectation.fulfill()
+        do {
+            try await sut.setup(facebookToken: "setup-token")
+            XCTFail("Expected instagramAccountNotFound error")
+        } catch let error as InstagramGraphServiceError {
+            guard case .instagramAccountNotFound = error else {
+                XCTFail("Expected instagramAccountNotFound, got \(error)")
+                return
+            }
         }
 
-        wait(for: [expectation], timeout: 1)
-        guard let serviceError = receivedError as? InstagramGraphServiceError,
-              case .instagramAccountNotFound = serviceError else {
-            XCTFail("Expected instagramAccountNotFound, got \(String(describing: receivedError))")
-            return
-        }
         XCTAssertNil(settings.facebookToken)
         XCTAssertNil(settings.instagramBusinessAccountId)
         XCTAssertFalse(settings.isCorrectSetup)
@@ -385,7 +351,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertFalse(url.contains("media.limit(12%7B"))
     }
 
-    func testHashtagRepository_whenCredentialsAreMissing_doesNotCallGraphClient() {
+    func testHashtagRepository_whenCredentialsAreMissing_doesNotCallGraphClient() async throws {
         let client = FakeInstagramGraphClient()
         let sut = InstagramHashtagRepository(
             credentialsProvider: FakeInstagramGraphCredentialsProvider(
@@ -395,28 +361,23 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             endpointBuilder: InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion),
             client: client
         )
-        let expectation = expectation(description: "search completes")
 
-        sut.searchHashtag(searchedHashtag: "travel") { result in
-            switch result {
-            case .success:
-                XCTFail("Expected missing credentials failure")
-            case .failure(let error):
-                guard case InstagramGraphServiceError.missingCredentials(let hasToken, let hasInstagramBusinessId) = error else {
-                    XCTFail("Expected missingCredentials error, got \(error)")
-                    return
-                }
-                XCTAssertFalse(hasToken)
-                XCTAssertTrue(hasInstagramBusinessId)
+        do {
+            _ = try await sut.searchHashtag(searchedHashtag: "travel")
+            XCTFail("Expected missing credentials failure")
+        } catch let error as InstagramGraphServiceError {
+            guard case .missingCredentials(let hasToken, let hasInstagramBusinessId) = error else {
+                XCTFail("Expected missingCredentials error, got \(error)")
+                return
             }
-            expectation.fulfill()
+            XCTAssertFalse(hasToken)
+            XCTAssertTrue(hasInstagramBusinessId)
         }
 
-        wait(for: [expectation], timeout: 1)
         XCTAssertTrue(client.requestedURLs.isEmpty)
     }
 
-    func testHashtagRepository_fetchesHashtagMediaWithGraphClient() throws {
+    func testHashtagRepository_fetchesHashtagMediaWithGraphClient() async throws {
         let client = FakeInstagramGraphClient(responses: [
             .success(#"{"data":[{"id":"17841562498105353"}]}"#.data(using: .utf8)!),
             .success(#"{"data":[{"media_type":"IMAGE","caption":"Hello","timestamp":"2026-06-07T08:00:00+0000","media_url":"https://example.com/image.jpg","comments_count":3,"like_count":9}]}"#.data(using: .utf8)!)
@@ -429,34 +390,25 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             endpointBuilder: InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion),
             client: client
         )
-        let expectation = expectation(description: "search completes")
-        var loadedMedia: [DataMedia]?
 
-        sut.searchHashtag(searchedHashtag: "travel") { result in
-            loadedMedia = try? result.get()
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 1)
+        let loadedMedia = try await sut.searchHashtag(searchedHashtag: "travel")
 
         XCTAssertEqual(client.requestedURLs.count, 2)
         XCTAssertTrue(client.requestedURLs[0].contains("ig_hashtag_search"))
         XCTAssertTrue(client.requestedURLs[1].contains("17841562498105353/top_media"))
-        let firstMedia = try XCTUnwrap(loadedMedia?.first)
+        let firstMedia = try XCTUnwrap(loadedMedia.first)
         XCTAssertEqual(firstMedia.caption, "Hello")
         XCTAssertEqual(firstMedia.commentsCount, 3)
         XCTAssertEqual(firstMedia.likeCount, 9)
     }
 
-    func testHashtagRepository_whenTopMediaReturns500_propagatesError() {
+    func testHashtagRepository_whenTopMediaReturns500_propagatesError() async throws {
         let reduceDataError: Result<Data, Error> = .failure(InstagramGraphServiceError.graphHTTPError(
             statusCode: 500,
             body: #"{"error":{"code":1,"message":"Please reduce the amount of data you're asking for, then retry your request"}}"#
         ))
         let client = FakeInstagramGraphClient(responses: [
             .success(#"{"data":[{"id":"17843819167049166"}]}"#.data(using: .utf8)!),
-            reduceDataError,
-            reduceDataError,
             reduceDataError
         ])
         let sut = InstagramHashtagRepository(
@@ -467,24 +419,20 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             endpointBuilder: InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion),
             client: client
         )
-        let expectation = expectation(description: "search completes")
-        var receivedError: Error?
 
-        sut.searchHashtag(searchedHashtag: "travel") { result in
-            if case .failure(let error) = result { receivedError = error }
-            expectation.fulfill()
+        do {
+            _ = try await sut.searchHashtag(searchedHashtag: "travel")
+            XCTFail("Expected graphHTTPError")
+        } catch let error as InstagramGraphServiceError {
+            guard case .graphHTTPError(let statusCode, _) = error else {
+                XCTFail("Expected graphHTTPError, got \(error)")
+                return
+            }
+            XCTAssertEqual(statusCode, 500)
         }
-
-        wait(for: [expectation], timeout: 1)
-        guard let serviceError = receivedError as? InstagramGraphServiceError,
-              case .graphHTTPError(let statusCode, _) = serviceError else {
-            XCTFail("Expected graphHTTPError, got \(String(describing: receivedError))")
-            return
-        }
-        XCTAssertEqual(statusCode, 500)
     }
 
-    func testProfileRepository_whenInsightsMetricInvalid_propagates400Error() {
+    func testProfileRepository_whenInsightsMetricInvalid_propagates400Error() async throws {
         let invalidMetricBody = #"{"error":{"message":"(#100) metric[1] must be one of the following values: reach, follower_count, ...","type":"OAuthException","code":100}}"#
         let failure: Result<Data, Error> = .failure(InstagramGraphServiceError.graphHTTPError(statusCode: 400, body: invalidMetricBody))
         let client = FakeInstagramGraphClient(responses: [failure])
@@ -497,38 +445,33 @@ final class ConnectedInsightsGraphTests: XCTestCase {
             client: client,
             onDataFetched: { _ in }
         )
-        let expectation = expectation(description: "load completes")
-        var receivedError: Error?
 
-        sut.loadProfileForAnalytics { result in
-            if case .failure(let error) = result { receivedError = error }
-            expectation.fulfill()
+        do {
+            _ = try await sut.loadProfileForAnalytics(mediaLimit: nil)
+            XCTFail("Expected graphHTTPError")
+        } catch let error as InstagramGraphServiceError {
+            guard case .graphHTTPError(let statusCode, _) = error else {
+                XCTFail("Expected graphHTTPError, got \(error)")
+                return
+            }
+            XCTAssertEqual(statusCode, 400)
         }
-
-        wait(for: [expectation], timeout: 1)
-        guard let serviceError = receivedError as? InstagramGraphServiceError,
-              case .graphHTTPError(let statusCode, _) = serviceError else {
-            XCTFail("Expected graphHTTPError, got \(String(describing: receivedError))")
-            return
-        }
-        XCTAssertEqual(statusCode, 400)
     }
 
-    func testUnavailableProvidersReturnUnavailableError() {
-        let hashtagExpectation = expectation(description: "hashtag unavailable completes")
-        let profileExpectation = expectation(description: "profile unavailable completes")
-
-        UnavailableHashtagProvider().searchHashtag(searchedHashtag: "travel") { result in
-            XCTAssertThrowsUnavailableError(result)
-            hashtagExpectation.fulfill()
+    func testUnavailableProvidersReturnUnavailableError() async throws {
+        do {
+            _ = try await UnavailableHashtagProvider().searchHashtag(searchedHashtag: "travel")
+            XCTFail("Expected unavailable provider failure")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, ConnectedInsightsError.dataProviderUnavailable.localizedDescription)
         }
 
-        UnavailableProfileProvider().loadProfileForAnalytics { result in
-            XCTAssertThrowsUnavailableError(result)
-            profileExpectation.fulfill()
+        do {
+            _ = try await UnavailableProfileProvider().loadProfileForAnalytics(mediaLimit: nil)
+            XCTFail("Expected unavailable provider failure")
+        } catch {
+            XCTAssertEqual(error.localizedDescription, ConnectedInsightsError.dataProviderUnavailable.localizedDescription)
         }
-
-        wait(for: [hashtagExpectation, profileExpectation], timeout: 1)
     }
 
     private func makeGateway(
@@ -597,51 +540,23 @@ private final class FakeInstagramGraphClient: InstagramGraphClientProtocol {
         self.responses = responses
     }
 
-    func fetchGraphData(
-        from urlString: String,
-        completion: @escaping (Result<Data, Error>) -> Void
-    ) {
+    func fetchGraphData(from urlString: String) async throws -> Data {
         requestedURLs.append(urlString)
         guard !responses.isEmpty else {
-            completion(.failure(InstagramGraphServiceError.emptyResponse))
-            return
+            throw InstagramGraphServiceError.emptyResponse
         }
-        completion(responses.removeFirst())
+        return try responses.removeFirst().get()
     }
 }
 
 private struct FakeHashtagProvider: HashtagSearchProviding {
-    func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    ) {
-        completion(.success([]))
+    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+        return []
     }
 }
 
 private struct FakeProfileProvider: ProfileDataProviding {
-    func loadProfileForAnalytics(
-        mediaLimit: Int?,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    ) {
-        completion(.failure(ConnectedInsightsError.dataProviderUnavailable))
-    }
-}
-
-private func XCTAssertThrowsUnavailableError<T>(
-    _ result: Result<T, Error>,
-    file: StaticString = #filePath,
-    line: UInt = #line
-) {
-    switch result {
-    case .success:
-        XCTFail("Expected unavailable provider failure", file: file, line: line)
-    case .failure(let error):
-        XCTAssertEqual(
-            error.localizedDescription,
-            ConnectedInsightsError.dataProviderUnavailable.localizedDescription,
-            file: file,
-            line: line
-        )
+    func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile {
+        throw ConnectedInsightsError.dataProviderUnavailable
     }
 }

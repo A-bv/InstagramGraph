@@ -4,12 +4,12 @@ import XCTest
 final class MetaLiveTests: XCTestCase {
     private let environment = ProcessInfo.processInfo.environment
 
-    func testMeAccountsEndpointAgainstMeta() throws {
+    func testMeAccountsEndpointAgainstMeta() async throws {
         let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
         let version = graphAPIVersion
         let url = "https://graph.facebook.com/\(version)/me/accounts?fields=id,name,access_token,tasks,instagram_business_account{id,username}&access_token=\(token)"
 
-        let data = try fetchGraphData(from: url, version: version)
+        let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
         let response = try JSONDecoder().decode(MeAccountsResponse.self, from: data)
 
         XCTAssertFalse(response.data.isEmpty, "Expected /me/accounts to return at least one page.")
@@ -18,13 +18,13 @@ final class MetaLiveTests: XCTestCase {
         }
     }
 
-    func testPageInstagramBusinessAccountAgainstMeta() throws {
+    func testPageInstagramBusinessAccountAgainstMeta() async throws {
         let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
         let version = graphAPIVersion
-        let pageID = try resolvePageId(token: token, version: version)
+        let pageID = try await resolvePageId(token: token, version: version)
         let url = "https://graph.facebook.com/\(version)/\(pageID)?fields=instagram_business_account{id,username}&access_token=\(token)"
 
-        let data = try fetchGraphData(from: url, version: version)
+        let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
         let response = try JSONDecoder().decode(PageInstagramBusinessAccountResponse.self, from: data)
         let account = try XCTUnwrap(
             response.instagramBusinessAccount,
@@ -34,11 +34,11 @@ final class MetaLiveTests: XCTestCase {
         print("[MetaLive] Instagram business id=\(account.id) username=\(account.username ?? "<none>")")
     }
 
-    func testAnalyticsProfileEndpointAgainstMeta() throws {
+    func testAnalyticsProfileEndpointAgainstMeta() async throws {
         let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
         let version = graphAPIVersion
-        let pageID = try resolvePageId(token: token, version: version)
-        let instagramBusinessId = try resolveInstagramBusinessAccountId(
+        let pageID = try await resolvePageId(token: token, version: version)
+        let instagramBusinessId = try await resolveInstagramBusinessAccountId(
             token: token,
             pageID: pageID,
             version: version
@@ -54,16 +54,16 @@ final class MetaLiveTests: XCTestCase {
             credentials: credentials
         ))
 
-        let data = try fetchGraphData(from: url, version: version)
+        let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
         XCTAssertNoThrow(try JSONDecoder().decode(Profile.self, from: data))
     }
 
-    func testHashtagSearchAgainstMeta() throws {
+    func testHashtagSearchAgainstMeta() async throws {
         let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
         let hashtag = testHashtag
         let version = graphAPIVersion
-        let pageID = try resolvePageId(token: token, version: version)
-        let instagramBusinessId = try resolveInstagramBusinessAccountId(
+        let pageID = try await resolvePageId(token: token, version: version)
+        let instagramBusinessId = try await resolveInstagramBusinessAccountId(
             token: token,
             pageID: pageID,
             version: version
@@ -78,20 +78,12 @@ final class MetaLiveTests: XCTestCase {
             endpointBuilder: endpointBuilder,
             client: InstagramGraphClient(apiGraphVersion: version)
         )
-        let expectation = expectation(description: "Fetch hashtag media")
-        var receivedResult: Result<[DataMedia], Error>?
 
-        repository.searchHashtag(searchedHashtag: hashtag) { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 45)
-        let media = try XCTUnwrap(receivedResult).get()
+        let media = try await repository.searchHashtag(searchedHashtag: hashtag)
         XCTAssertFalse(media.isEmpty, "Expected hashtag search to return at least one media item.")
     }
 
-    func testExpensiveCaptionProbeAgainstMeta() throws {
+    func testExpensiveCaptionProbeAgainstMeta() async throws {
         guard environment["META_RUN_EXPENSIVE_CAPTION_PROBE"] == "1" else {
             throw XCTSkip("Set META_RUN_EXPENSIVE_CAPTION_PROBE=1 to reproduce Meta's caption page-size failure.")
         }
@@ -99,21 +91,25 @@ final class MetaLiveTests: XCTestCase {
         let token = try requiredEnvironmentValue("META_GRAPH_TOKEN")
         let hashtag = testHashtag
         let version = graphAPIVersion
-        let pageID = try resolvePageId(token: token, version: version)
-        let instagramBusinessId = try resolveInstagramBusinessAccountId(
+        let pageID = try await resolvePageId(token: token, version: version)
+        let instagramBusinessId = try await resolveInstagramBusinessAccountId(
             token: token,
             pageID: pageID,
             version: version
         )
+        let client = InstagramGraphClient(apiGraphVersion: version)
         let searchURL = "https://graph.facebook.com/\(version)/ig_hashtag_search?user_id=\(instagramBusinessId)&q=\(hashtag)&access_token=\(token)"
-        let searchData = try fetchGraphData(from: searchURL, version: version)
+        let searchData = try await client.fetchGraphData(from: searchURL)
         let hashtagResponse = try JSONDecoder().decode(HashtagIdResponse.self, from: searchData)
         let hashtagID = try XCTUnwrap(hashtagResponse.data.first?.id)
         let fields = "id,caption"
         let probeURL = "https://graph.facebook.com/\(version)/\(hashtagID)/top_media?fields=\(fields)&user_id=\(instagramBusinessId)&limit=10&access_token=\(token)"
 
-        XCTAssertThrowsError(try fetchGraphData(from: probeURL, version: version)) { error in
-            guard case InstagramGraphServiceError.graphHTTPError(let statusCode, let body) = error else {
+        do {
+            _ = try await client.fetchGraphData(from: probeURL)
+            XCTFail("Expected graphHTTPError with status 500")
+        } catch let error as InstagramGraphServiceError {
+            guard case .graphHTTPError(let statusCode, let body) = error else {
                 XCTFail("Expected graphHTTPError, got \(error)")
                 return
             }
@@ -144,13 +140,13 @@ final class MetaLiveTests: XCTestCase {
         return value
     }
 
-    private func resolvePageId(token: String, version: String) throws -> String {
+    private func resolvePageId(token: String, version: String) async throws -> String {
         if let pageID = optionalEnvironmentValue("META_PAGE_ID") {
             return pageID
         }
 
         let url = "https://graph.facebook.com/\(version)/me/accounts?fields=id,name,instagram_business_account{id,username}&access_token=\(token)"
-        let data = try fetchGraphData(from: url, version: version)
+        let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
         let response = try JSONDecoder().decode(MeAccountsResponse.self, from: data)
         let page = try XCTUnwrap(
             response.data.first(where: { $0.instagramBusinessAccount != nil }),
@@ -164,28 +160,14 @@ final class MetaLiveTests: XCTestCase {
         token: String,
         pageID: String,
         version: String
-    ) throws -> String {
+    ) async throws -> String {
         let url = "https://graph.facebook.com/\(version)/\(pageID)?fields=instagram_business_account{id}&access_token=\(token)"
-        let data = try fetchGraphData(from: url, version: version)
+        let data = try await InstagramGraphClient(apiGraphVersion: version).fetchGraphData(from: url)
         let response = try JSONDecoder().decode(PageInstagramBusinessAccountResponse.self, from: data)
         return try XCTUnwrap(
             response.instagramBusinessAccount?.id,
             "The selected page has no connected Instagram Business / Creator account."
         )
-    }
-
-    private func fetchGraphData(from url: String, version: String) throws -> Data {
-        let client = InstagramGraphClient(apiGraphVersion: version)
-        let expectation = expectation(description: "Fetch Graph data")
-        var receivedResult: Result<Data, Error>?
-
-        client.fetchGraphData(from: url) { result in
-            receivedResult = result
-            expectation.fulfill()
-        }
-
-        wait(for: [expectation], timeout: 30)
-        return try XCTUnwrap(receivedResult).get()
     }
 }
 

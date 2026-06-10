@@ -37,22 +37,16 @@ public enum ConnectedInsightsAccessState {
 }
 
 public protocol HashtagSearchProviding {
-    func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    )
+    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
 }
 
 public protocol ProfileDataProviding {
-    func loadProfileForAnalytics(
-        mediaLimit: Int?,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    )
+    func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
 public extension ProfileDataProviding {
-    func loadProfileForAnalytics(completion: @escaping (Result<Profile, Error>) -> Void) {
-        loadProfileForAnalytics(mediaLimit: nil, completion: completion)
+    func loadProfileForAnalytics() async throws -> Profile {
+        try await loadProfileForAnalytics(mediaLimit: nil)
     }
 }
 
@@ -61,7 +55,7 @@ public protocol ConnectedInsightsGatewayProtocol {
     var profileProvider: any ProfileDataProviding { get }
 
     func accessState() -> ConnectedInsightsAccessState
-    func setup(facebookToken: String, completion: @escaping (Result<Void, Error>) -> Void)
+    func setup(facebookToken: String) async throws
     func reset()
 }
 
@@ -114,19 +108,15 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
         self.accountResolver = accountResolver
     }
 
-    public func setup(facebookToken: String, completion: @escaping (Result<Void, Error>) -> Void) {
-        accountResolver.resolveAccount(facebookToken: facebookToken) { [weak self] result in
-            guard let self else { return }
-            switch result {
-            case .success(let account):
-                self.settings.instagramBusinessAccountId = account.instagramBusinessAccountId
-                self.settings.isCorrectSetup = true
-                completion(.success(()))
-            case .failure(let error):
-                InstagramGraphLogger.logFailure(error, url: "setup/account-resolution")
-                self.settings.isCorrectSetup = false
-                completion(.failure(error))
-            }
+    public func setup(facebookToken: String) async throws {
+        do {
+            let account = try await accountResolver.resolveAccount(facebookToken: facebookToken)
+            settings.instagramBusinessAccountId = account.instagramBusinessAccountId
+            settings.isCorrectSetup = true
+        } catch {
+            InstagramGraphLogger.logFailure(error, url: "setup/account-resolution")
+            settings.isCorrectSetup = false
+            throw error
         }
     }
 
@@ -163,21 +153,15 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
 public struct UnavailableHashtagProvider: HashtagSearchProviding {
     public init() {}
 
-    public func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    ) {
-        completion(.failure(ConnectedInsightsError.dataProviderUnavailable))
+    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+        throw ConnectedInsightsError.dataProviderUnavailable
     }
 }
 
 public struct UnavailableProfileProvider: ProfileDataProviding {
     public init() {}
 
-    public func loadProfileForAnalytics(
-        mediaLimit: Int? = nil,
-        completion: @escaping (Result<Profile, Error>) -> Void
-    ) {
-        completion(.failure(ConnectedInsightsError.dataProviderUnavailable))
+    public func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
+        throw ConnectedInsightsError.dataProviderUnavailable
     }
 }

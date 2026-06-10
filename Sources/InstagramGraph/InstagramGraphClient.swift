@@ -31,10 +31,7 @@ public enum InstagramGraphServiceError: LocalizedError {
 }
 
 public protocol InstagramGraphClientProtocol {
-    func fetchGraphData(
-        from urlString: String,
-        completion: @escaping (Result<Data, Error>) -> Void
-    )
+    func fetchGraphData(from urlString: String) async throws -> Data
 }
 
 public final class InstagramGraphClient: InstagramGraphClientProtocol {
@@ -49,44 +46,28 @@ public final class InstagramGraphClient: InstagramGraphClientProtocol {
         self.session = session
     }
 
-    public func fetchGraphData(
-        from urlString: String,
-        completion: @escaping (Result<Data, Error>) -> Void
-    ) {
+    public func fetchGraphData(from urlString: String) async throws -> Data {
         guard let url = URL(string: urlString) else {
-            completion(.failure(InstagramGraphServiceError.invalidURL(InstagramGraphLogRedactor.redacted(urlString))))
-            return
+            throw InstagramGraphServiceError.invalidURL(InstagramGraphLogRedactor.redacted(urlString))
         }
 
         InstagramGraphLogger.logRequest(version: apiGraphVersion, url: urlString)
 
-        session.dataTask(with: url) { data, response, error in
-            if let error = error {
-                completion(.failure(error))
-                return
-            }
+        let (data, response) = try await session.data(from: url)
 
-            guard let httpResponse = response as? HTTPURLResponse else {
-                completion(.failure(InstagramGraphServiceError.unexpectedResponse))
-                return
-            }
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw InstagramGraphServiceError.unexpectedResponse
+        }
 
-            guard let data = data else {
-                completion(.failure(InstagramGraphServiceError.emptyResponse))
-                return
-            }
+        guard (200...299).contains(httpResponse.statusCode) else {
+            let body = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
+            throw InstagramGraphServiceError.graphHTTPError(
+                statusCode: httpResponse.statusCode,
+                body: InstagramGraphLogRedactor.redacted(String(body.prefix(1_500)))
+            )
+        }
 
-            guard (200...299).contains(httpResponse.statusCode) else {
-                let body = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
-                completion(.failure(InstagramGraphServiceError.graphHTTPError(
-                    statusCode: httpResponse.statusCode,
-                    body: InstagramGraphLogRedactor.redacted(String(body.prefix(1_500)))
-                )))
-                return
-            }
-
-            completion(.success(data))
-        }.resume()
+        return data
     }
 }
 

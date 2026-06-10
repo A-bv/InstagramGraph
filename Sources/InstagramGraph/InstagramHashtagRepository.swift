@@ -1,10 +1,7 @@
 import Foundation
 
 public protocol InstagramHashtagRepositoryProtocol: HashtagSearchProviding {
-    func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    )
+    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
 }
 
 public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol {
@@ -22,97 +19,54 @@ public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtoco
         self.client = client
     }
 
-    public func searchHashtag(
-        searchedHashtag: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    ) {
-        findHashtagUrl(searchedHashtag: searchedHashtag) { result in
-            switch result {
-            case .success(let mediaSearchURL):
-                self.getMedia(for: mediaSearchURL, completion: completion)
-            case .failure(let error):
-                completion(.failure(error))
-            }
-        }
+    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+        let mediaSearchURL = try await findHashtagURL(searchedHashtag: searchedHashtag)
+        return try await getMedia(for: mediaSearchURL)
     }
 
-    private func getMedia(
-        for url: String,
-        completion: @escaping (Result<[DataMedia], Error>) -> Void
-    ) {
-        client.fetchGraphData(from: url) { result in
-            switch result {
-            case .failure(let error):
-                InstagramGraphLogger.logFailure(error, url: url)
-                completion(.failure(error))
-            case .success(let data):
-                guard let media = try? JSONDecoder().decode(Media.self, from: data) else {
-                    let error = InstagramGraphServiceError.decodingFailed(
-                        type: String(describing: Media.self),
-                        body: InstagramGraphLogger.responsePreview(data)
-                    )
-                    InstagramGraphLogger.logFailure(error, url: url)
-                    completion(.failure(error))
-                    return
-                }
-                completion(.success(media.data.compactMap { $0 }))
-            }
+    private func findHashtagURL(searchedHashtag: String) async throws -> String {
+        let credentials = try credentialsProvider.validCredentials().get()
+        guard let searchURL = endpointBuilder.hashtagSearchURL(
+            searchedHashtag: searchedHashtag,
+            credentials: credentials
+        ) else {
+            throw InstagramGraphServiceError.invalidURL(searchedHashtag)
         }
+
+        let data = try await client.fetchGraphData(from: searchURL)
+        return try resolveMediaSearchURL(from: data, credentials: credentials)
     }
 
-    private func findHashtagUrl(
-        searchedHashtag: String,
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
-        switch credentialsProvider.validCredentials() {
-        case .failure(let error):
-            completion(.failure(error))
-        case .success(let credentials):
-            guard let searchURL = endpointBuilder.hashtagSearchURL(
-                searchedHashtag: searchedHashtag,
-                credentials: credentials
-            ) else {
-                completion(.failure(InstagramGraphServiceError.invalidURL(searchedHashtag)))
-                return
-            }
-
-            client.fetchGraphData(from: searchURL) { result in
-                switch result {
-                case .success(let data):
-                    self.handleHashtagIdResponse(data: data, credentials: credentials, completion: completion)
-                case .failure(let error):
-                    InstagramGraphLogger.logFailure(error, url: searchURL)
-                    completion(.failure(error))
-                }
-            }
+    private func resolveMediaSearchURL(
+        from data: Data,
+        credentials: InstagramGraphCredentials
+    ) throws -> String {
+        let response = try JSONDecoder().decode(HashtagIdResponse.self, from: data)
+        guard let id = response.data.first?.id else {
+            throw InstagramGraphServiceError.decodingFailed(
+                type: String(describing: HashtagIdResponse.self),
+                body: InstagramGraphLogger.responsePreview(data)
+            )
         }
+        guard let mediaSearchURL = endpointBuilder.hashtagMediaSearchURL(
+            hashtagID: id,
+            credentials: credentials
+        ) else {
+            throw InstagramGraphServiceError.invalidURL(id)
+        }
+        return mediaSearchURL
     }
 
-    private func handleHashtagIdResponse(
-        data: Data,
-        credentials: InstagramGraphCredentials,
-        completion: @escaping (Result<String, Error>) -> Void
-    ) {
-        do {
-            let response = try JSONDecoder().decode(HashtagIdResponse.self, from: data)
-            guard let id = response.data.first?.id else {
-                completion(.failure(InstagramGraphServiceError.decodingFailed(
-                    type: String(describing: HashtagIdResponse.self),
-                    body: InstagramGraphLogger.responsePreview(data)
-                )))
-                return
-            }
-            guard let mediaSearchURL = endpointBuilder.hashtagMediaSearchURL(
-                hashtagID: id,
-                credentials: credentials
-            ) else {
-                completion(.failure(InstagramGraphServiceError.invalidURL(id)))
-                return
-            }
-            completion(.success(mediaSearchURL))
-        } catch {
-            completion(.failure(error))
+    private func getMedia(for url: String) async throws -> [DataMedia] {
+        let data = try await client.fetchGraphData(from: url)
+        guard let media = try? JSONDecoder().decode(Media.self, from: data) else {
+            let error = InstagramGraphServiceError.decodingFailed(
+                type: String(describing: Media.self),
+                body: InstagramGraphLogger.responsePreview(data)
+            )
+            InstagramGraphLogger.logFailure(error, url: url)
+            throw error
         }
+        return media.data.compactMap { $0 }
     }
-
 }

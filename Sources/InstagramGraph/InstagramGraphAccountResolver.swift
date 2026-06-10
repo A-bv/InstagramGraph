@@ -38,58 +38,43 @@ public final class InstagramGraphAccountResolver {
         self.client = client
     }
 
-    public func resolveAccount(
-        facebookToken: String,
-        completion: @escaping (Result<InstagramGraphResolvedAccount, Error>) -> Void
-    ) {
+    public func resolveAccount(facebookToken: String) async throws -> InstagramGraphResolvedAccount {
         guard let url = meAccountsURL(facebookToken: facebookToken) else {
-            completion(.failure(InstagramGraphServiceError.invalidURL("/me/accounts")))
-            return
+            throw InstagramGraphServiceError.invalidURL("/me/accounts")
         }
 
-        client.fetchGraphData(from: url) { result in
-            switch result {
-            case .success(let data):
-                do {
-                    let response = try JSONDecoder().decode(InstagramGraphMeAccountsResponse.self, from: data)
-                    guard let page = response.data.first(where: { $0.instagramBusinessAccount != nil }),
-                          let instagramAccount = page.instagramBusinessAccount
-                    else {
-                        completion(.failure(InstagramGraphServiceError.instagramAccountNotFound))
-                        return
-                    }
+        let data = try await client.fetchGraphData(from: url)
 
-                    completion(.success(InstagramGraphResolvedAccount(
-                        facebookPageId: page.id,
-                        facebookPageName: page.name,
-                        instagramBusinessAccountId: instagramAccount.id,
-                        instagramUsername: instagramAccount.username
-                    )))
-                } catch {
-                    let body = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
-                    completion(.failure(InstagramGraphServiceError.decodingFailed(
-                        type: "InstagramGraphMeAccountsResponse",
-                        body: InstagramGraphLogRedactor.redacted(String(body.prefix(1_500)))
-                    )))
-                }
-            case .failure(let error):
-                completion(.failure(error))
+        do {
+            let response = try JSONDecoder().decode(InstagramGraphMeAccountsResponse.self, from: data)
+            guard let page = response.data.first(where: { $0.instagramBusinessAccount != nil }),
+                  let instagramAccount = page.instagramBusinessAccount
+            else {
+                throw InstagramGraphServiceError.instagramAccountNotFound
             }
+            return InstagramGraphResolvedAccount(
+                facebookPageId: page.id,
+                facebookPageName: page.name,
+                instagramBusinessAccountId: instagramAccount.id,
+                instagramUsername: instagramAccount.username
+            )
+        } catch let error as InstagramGraphServiceError {
+            throw error
+        } catch {
+            let body = String(data: data, encoding: .utf8) ?? "<non-utf8 response>"
+            throw InstagramGraphServiceError.decodingFailed(
+                type: "InstagramGraphMeAccountsResponse",
+                body: InstagramGraphLogRedactor.redacted(String(body.prefix(1_500)))
+            )
         }
     }
 
-    public func resolveCredentials(
-        facebookToken: String,
-        completion: @escaping (Result<InstagramGraphCredentials, Error>) -> Void
-    ) {
-        resolveAccount(facebookToken: facebookToken) { result in
-            completion(result.map { account in
-                InstagramGraphCredentials(
-                    facebookToken: facebookToken,
-                    instagramBusinessAccountId: account.instagramBusinessAccountId
-                )
-            })
-        }
+    public func resolveCredentials(facebookToken: String) async throws -> InstagramGraphCredentials {
+        let account = try await resolveAccount(facebookToken: facebookToken)
+        return InstagramGraphCredentials(
+            facebookToken: facebookToken,
+            instagramBusinessAccountId: account.instagramBusinessAccountId
+        )
     }
 
     private func meAccountsURL(facebookToken: String) -> String? {

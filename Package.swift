@@ -3,7 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "InstagramGraph",
-    platforms: [.iOS(.v15), .macOS(.v11)],
+    platforms: [.iOS(.v15), .macOS(.v12)],
     products: [
         .library(name: "InstagramGraph", targets: ["InstagramGraph"]),
     ],
