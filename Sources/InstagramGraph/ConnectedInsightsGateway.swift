@@ -51,21 +51,23 @@ public extension ProfileDataProviding {
 }
 
 @MainActor
-public protocol ConnectedInsightsGatewayProtocol {
-    var hashtagProvider: any HashtagSearchProviding { get }
-    var profileProvider: any ProfileDataProviding { get }
-
+public protocol ConnectedInsightsGatewayProtocol: HashtagSearchProviding, ProfileDataProviding {
     func accessState() -> ConnectedInsightsAccessState
     func setup(facebookToken: String) async throws
     func reset()
+
+    // TODO: func businessDiscoveryURL(account: String) -> String?
+    // Builds a Graph API URL for fetching a competitor account's public Instagram data
+    // via Meta's business_discovery field. Needs live testing against the API before
+    // being made public — the endpoint behaviour has not been verified.
 }
 
 @MainActor
 public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private var settings: any ConnectedInsightsSettingsProtocol
     private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
-    public let hashtagProvider: any HashtagSearchProviding
-    public let profileProvider: any ProfileDataProviding
+    private let hashtagProvider: any HashtagSearchProviding
+    private let profileProvider: any ProfileDataProviding
     private let accountResolver: InstagramGraphAccountResolver
 
     public convenience init(
@@ -96,7 +98,7 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
         )
     }
 
-    public init(
+    init(
         settings: any ConnectedInsightsSettingsProtocol,
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil,
         hashtagProvider: any HashtagSearchProviding,
@@ -108,6 +110,14 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
         self.hashtagProvider = hashtagProvider
         self.profileProvider = profileProvider
         self.accountResolver = accountResolver
+    }
+
+    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+        try await hashtagProvider.searchHashtag(searchedHashtag: searchedHashtag)
+    }
+
+    public func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile {
+        try await profileProvider.loadProfileForAnalytics(mediaLimit: mediaLimit)
     }
 
     public func setup(facebookToken: String) async throws {

@@ -1,15 +1,15 @@
 import Foundation
 
-public protocol InstagramHashtagRepositoryProtocol: HashtagSearchProviding {
+protocol InstagramHashtagRepositoryProtocol: HashtagSearchProviding {
     func searchHashtag(searchedHashtag: String) async throws -> [DataMedia]
 }
 
-public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Sendable {
+final class InstagramHashtagRepository: InstagramHashtagRepositoryProtocol, Sendable {
     private let credentialsProvider: any InstagramGraphCredentialsProviding
     private let endpointBuilder: InstagramGraphEndpointBuilder
     private let client: any InstagramGraphClientProtocol
 
-    public init(
+    init(
         credentialsProvider: any InstagramGraphCredentialsProviding,
         endpointBuilder: InstagramGraphEndpointBuilder,
         client: any InstagramGraphClientProtocol
@@ -19,7 +19,7 @@ public final class InstagramHashtagRepository: InstagramHashtagRepositoryProtoco
         self.client = client
     }
 
-    public func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
+    func searchHashtag(searchedHashtag: String) async throws -> [DataMedia] {
         let mediaSearchURL = try await findHashtagURL(searchedHashtag: searchedHashtag)
         return try await getMedia(for: mediaSearchURL)
     }

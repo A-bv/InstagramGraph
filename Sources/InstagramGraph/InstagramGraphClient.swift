@@ -30,15 +30,15 @@ public enum InstagramGraphServiceError: LocalizedError {
     }
 }
 
-public protocol InstagramGraphClientProtocol: Sendable {
+protocol InstagramGraphClientProtocol: Sendable {
     func fetchGraphData(from urlString: String) async throws -> Data
 }
 
-public final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable {
+final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable {
     private let apiGraphVersion: String
     private let session: URLSession
 
-    public init(
+    init(
         apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion,
         session: URLSession = .shared
     ) {
@@ -46,7 +46,7 @@ public final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable 
         self.session = session
     }
 
-    public func fetchGraphData(from urlString: String) async throws -> Data {
+    func fetchGraphData(from urlString: String) async throws -> Data {
         guard let url = URL(string: urlString) else {
             throw InstagramGraphServiceError.invalidURL(InstagramGraphLogRedactor.redacted(urlString))
         }
@@ -71,8 +71,8 @@ public final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable 
     }
 }
 
-public enum InstagramGraphLogRedactor {
-    public static func redacted(_ value: String) -> String {
+enum InstagramGraphLogRedactor {
+    static func redacted(_ value: String) -> String {
         value.replacingOccurrences(
             of: #"access_token=[^&\s]+"#,
             with: "access_token=<redacted>",

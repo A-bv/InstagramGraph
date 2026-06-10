@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol InstagramGraphCredentialsProviding: Sendable {
+protocol InstagramGraphCredentialsProviding: Sendable {
     var facebookToken: String? { get }
     var instagramBusinessAccountId: String? { get }
     func validCredentials() -> Result<InstagramGraphCredentials, Error>
@@ -10,36 +10,31 @@ public protocol InstagramGraphAccessTokenProviding: Sendable {
     var facebookToken: String? { get }
 }
 
-public struct InstagramGraphCredentials {
-    public let facebookToken: String
-    public let instagramBusinessAccountId: String
-
-    public init(facebookToken: String, instagramBusinessAccountId: String) {
-        self.facebookToken = facebookToken
-        self.instagramBusinessAccountId = instagramBusinessAccountId
-    }
+struct InstagramGraphCredentials {
+    let facebookToken: String
+    let instagramBusinessAccountId: String
 }
 
-public struct StaticInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding {
-    public let facebookToken: String?
-    public let instagramBusinessAccountId: String?
+struct StaticInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding {
+    let facebookToken: String?
+    let instagramBusinessAccountId: String?
 
-    public init(facebookToken: String, instagramBusinessAccountId: String) {
+    init(facebookToken: String, instagramBusinessAccountId: String) {
         self.facebookToken = facebookToken
         self.instagramBusinessAccountId = instagramBusinessAccountId
     }
 
-    public init(credentials: InstagramGraphCredentials) {
+    init(credentials: InstagramGraphCredentials) {
         self.facebookToken = credentials.facebookToken
         self.instagramBusinessAccountId = credentials.instagramBusinessAccountId
     }
 }
 
-public final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding, Sendable {
+final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentialsProviding, Sendable {
     private let settings: any ConnectedInsightsSettingsProtocol
     private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
 
-    public init(
+    init(
         settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings(),
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
@@ -47,16 +42,16 @@ public final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCred
         self.tokenProvider = tokenProvider
     }
 
-    public var facebookToken: String? {
+    var facebookToken: String? {
         tokenProvider?.facebookToken ?? settings.facebookToken
     }
 
-    public var instagramBusinessAccountId: String? {
+    var instagramBusinessAccountId: String? {
         settings.instagramBusinessAccountId
     }
 }
 
-public extension InstagramGraphCredentialsProviding {
+extension InstagramGraphCredentialsProviding {
     func validCredentials() -> Result<InstagramGraphCredentials, Error> {
         let token = facebookToken ?? ""
         let instagramBusinessAccountId = instagramBusinessAccountId ?? ""

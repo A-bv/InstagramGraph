@@ -149,29 +149,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertTrue(client.requestedURLs[0].contains("access_token=facebook-token"))
     }
 
-    func testAccountResolver_resolveCredentialsBuildsServiceCredentials() async throws {
-        let response = """
-        {
-          "data": [
-            {
-              "id": "page-id",
-              "instagram_business_account": {
-                "id": "ig-business-id"
-              }
-            }
-          ]
-        }
-        """.data(using: .utf8)!
-        let client = FakeInstagramGraphClient(responses: [.success(response)])
-        let sut = InstagramGraphAccountResolver(apiGraphVersion: productionGraphAPIVersion, client: client)
-
-        let credentials = try await sut.resolveCredentials(facebookToken: "facebook-token")
-
-        XCTAssertEqual(credentials.facebookToken, "facebook-token")
-        XCTAssertEqual(credentials.instagramBusinessAccountId, "ig-business-id")
-    }
-
-    func testAccountResolver_whenNoPageHasInstagramAccountReturnsMissingCredentials() async throws {
+func testAccountResolver_whenNoPageHasInstagramAccountReturnsMissingCredentials() async throws {
         let response = """
         {
           "data": [

@@ -1,15 +1,15 @@
 import Foundation
 
-public protocol InstagramProfileRepositoryProtocol: ProfileDataProviding {
+protocol InstagramProfileRepositoryProtocol: ProfileDataProviding {
     func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
-public final class InstagramProfileRepository: InstagramProfileRepositoryProtocol, Sendable {
+final class InstagramProfileRepository: InstagramProfileRepositoryProtocol, Sendable {
     private let credentialsProvider: any InstagramGraphCredentialsProviding
     private let endpointBuilder: InstagramGraphEndpointBuilder
     private let client: any InstagramGraphClientProtocol
 
-    public init(
+    init(
         credentialsProvider: any InstagramGraphCredentialsProviding,
         endpointBuilder: InstagramGraphEndpointBuilder,
         client: any InstagramGraphClientProtocol
@@ -19,7 +19,7 @@ public final class InstagramProfileRepository: InstagramProfileRepositoryProtoco
         self.client = client
     }
 
-    public func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
+    func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
         let credentials = try credentialsProvider.validCredentials().get()
         guard let encodedUrl = endpointBuilder.analyticsProfileURL(
             mediaLimit: mediaLimit,

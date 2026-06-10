@@ -1,36 +1,22 @@
 import Foundation
 
-public struct InstagramGraphResolvedAccount {
-    public let facebookPageId: String
-    public let facebookPageName: String?
-    public let instagramBusinessAccountId: String
-    public let instagramUsername: String?
-
-    public init(
-        facebookPageId: String,
-        facebookPageName: String?,
-        instagramBusinessAccountId: String,
-        instagramUsername: String?
-    ) {
-        self.facebookPageId = facebookPageId
-        self.facebookPageName = facebookPageName
-        self.instagramBusinessAccountId = instagramBusinessAccountId
-        self.instagramUsername = instagramUsername
-    }
+struct InstagramGraphResolvedAccount {
+    let facebookPageId: String
+    let facebookPageName: String?
+    let instagramBusinessAccountId: String
+    let instagramUsername: String?
 }
 
-public final class InstagramGraphAccountResolver: Sendable {
+final class InstagramGraphAccountResolver: Sendable {
     private let apiGraphVersion: String
     private let client: any InstagramGraphClientProtocol
 
-    public init(
-        apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion
-    ) {
+    init(apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion) {
         self.apiGraphVersion = apiGraphVersion
         self.client = InstagramGraphClient(apiGraphVersion: apiGraphVersion)
     }
 
-    public init(
+    init(
         apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion,
         client: any InstagramGraphClientProtocol
     ) {
@@ -38,7 +24,7 @@ public final class InstagramGraphAccountResolver: Sendable {
         self.client = client
     }
 
-    public func resolveAccount(facebookToken: String) async throws -> InstagramGraphResolvedAccount {
+    func resolveAccount(facebookToken: String) async throws -> InstagramGraphResolvedAccount {
         guard let url = meAccountsURL(facebookToken: facebookToken) else {
             throw InstagramGraphServiceError.invalidURL("/me/accounts")
         }
@@ -69,7 +55,7 @@ public final class InstagramGraphAccountResolver: Sendable {
         }
     }
 
-    public func resolveCredentials(facebookToken: String) async throws -> InstagramGraphCredentials {
+    private func resolveCredentials(facebookToken: String) async throws -> InstagramGraphCredentials {
         let account = try await resolveAccount(facebookToken: facebookToken)
         return InstagramGraphCredentials(
             facebookToken: facebookToken,

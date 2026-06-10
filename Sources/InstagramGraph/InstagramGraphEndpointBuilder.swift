@@ -1,14 +1,14 @@
 import Foundation
 
-public struct InstagramGraphEndpointBuilder: Sendable {
+struct InstagramGraphEndpointBuilder: Sendable {
     private let apiGraphVersion: String
     private let baseURL = "https://graph.facebook.com"
 
-    public init(apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion) {
+    init(apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion) {
         self.apiGraphVersion = apiGraphVersion
     }
 
-    public func hashtagSearchURL(
+    func hashtagSearchURL(
         searchedHashtag: String,
         credentials: InstagramGraphCredentials
     ) -> String? {
@@ -16,7 +16,7 @@ public struct InstagramGraphEndpointBuilder: Sendable {
         return encoded(url)
     }
 
-    public func hashtagMediaSearchURL(
+    func hashtagMediaSearchURL(
         hashtagID: String,
         credentials: InstagramGraphCredentials
     ) -> String? {
@@ -37,7 +37,7 @@ public struct InstagramGraphEndpointBuilder: Sendable {
         return encoded(url)
     }
 
-    public func analyticsProfileURL(
+    func analyticsProfileURL(
         mediaLimit: Int?,
         credentials: InstagramGraphCredentials
     ) -> String? {
@@ -79,7 +79,7 @@ public struct InstagramGraphEndpointBuilder: Sendable {
         return encoded(url)
     }
 
-    public func businessDiscoveryURL(
+    func businessDiscoveryURL(
         account: String,
         credentials: InstagramGraphCredentials
     ) -> String? {

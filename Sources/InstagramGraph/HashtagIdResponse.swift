@@ -1,7 +1,7 @@
-public struct HashtagIdResponse: Codable {
-    public let data: [DataItem]
+struct HashtagIdResponse: Codable {
+    let data: [DataItem]
 }
 
-public struct DataItem: Codable {
-    public let id: String
+struct DataItem: Codable {
+    let id: String
 }
