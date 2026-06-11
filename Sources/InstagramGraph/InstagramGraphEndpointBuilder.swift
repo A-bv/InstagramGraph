@@ -51,7 +51,7 @@ struct InstagramGraphEndpointBuilder: Sendable {
             "is_comment_enabled",
             "username",
             "like_count",
-            "insights.metric(reach,impressions,total_interactions)"
+            "insights.metric(reach,views,total_interactions)"
         ]
         let mediaField: String
         if let mediaLimit {

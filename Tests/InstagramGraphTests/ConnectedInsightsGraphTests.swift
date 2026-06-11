@@ -318,7 +318,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertTrue(url.contains("media%7B"))
         XCTAssertFalse(url.contains("media.limit("))
         XCTAssertTrue(url.contains("caption"))
-        XCTAssertTrue(url.contains("insights.metric(reach%2Cimpressions%2Ctotal_interactions)"))
+        XCTAssertTrue(url.contains("insights.metric(reach%2Cviews%2Ctotal_interactions)"))
     }
 
     func testEndpointBuilder_businessDiscoveryURL_buildsValidMediaLimitSyntax() throws {
