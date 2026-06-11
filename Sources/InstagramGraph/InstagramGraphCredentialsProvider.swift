@@ -6,7 +6,7 @@ protocol InstagramGraphCredentialsProviding: Sendable {
     func validCredentials() -> Result<InstagramGraphCredentials, Error>
 }
 
-public protocol InstagramGraphAccessTokenProviding: Sendable {
+protocol InstagramGraphAccessTokenProviding: Sendable {
     var facebookToken: String? { get }
 }
 

@@ -59,19 +59,18 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private let accountResolver: InstagramGraphAccountResolver
 
     public convenience init(
-        configuration: ConnectedInsightsConfiguration = .production,
-        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
+        configuration: ConnectedInsightsConfiguration = .production
     ) {
         let settings = UserDefaultsConnectedInsightsSettings()
         let credentialsProvider = SettingsInstagramGraphCredentialsProvider(
             settings: settings,
-            tokenProvider: tokenProvider
+            tokenProvider: nil
         )
         let endpointBuilder = InstagramGraphEndpointBuilder(apiGraphVersion: configuration.graphAPIVersion)
         let client = InstagramGraphClient(apiGraphVersion: configuration.graphAPIVersion)
         self.init(
             settings: settings,
-            tokenProvider: tokenProvider,
+            tokenProvider: nil,
             hashtagProvider: InstagramHashtagRepository(
                 credentialsProvider: credentialsProvider,
                 endpointBuilder: endpointBuilder,
