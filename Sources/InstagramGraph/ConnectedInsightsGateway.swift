@@ -1,21 +1,10 @@
 import Foundation
 import OSLog
 
-public struct ConnectedInsightsSession {
-    public let facebookToken: String
-    public let instagramBusinessAccountId: String
-
-    public init(facebookToken: String, instagramBusinessAccountId: String) {
-        self.facebookToken = facebookToken
-        self.instagramBusinessAccountId = instagramBusinessAccountId
-    }
-}
-
 public enum ConnectedInsightsError: LocalizedError {
     case setupRequired
     case missingFacebookToken
     case missingInstagramBusinessAccountId
-    case dataProviderUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -25,41 +14,40 @@ public enum ConnectedInsightsError: LocalizedError {
             return "Facebook token is missing."
         case .missingInstagramBusinessAccountId:
             return "Instagram business account id is missing."
-        case .dataProviderUnavailable:
-            return "Connected Insights data provider is unavailable."
         }
     }
 }
 
 public enum ConnectedInsightsAccessState {
-    case ready(ConnectedInsightsSession)
+    case ready
     case needsSetup(ConnectedInsightsError)
 }
 
-public protocol HashtagSearchProviding: Sendable {
+protocol HashtagSearchProviding: Sendable {
     func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost]
 }
 
-public protocol ProfileDataProviding: Sendable {
+protocol ProfileDataProviding: Sendable {
     func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 }
 
-public extension ProfileDataProviding {
-    func loadProfileForAnalytics() async throws -> Profile {
-        try await loadProfileForAnalytics(mediaLimit: nil)
-    }
-}
-
 @MainActor
-public protocol ConnectedInsightsGatewayProtocol: HashtagSearchProviding, ProfileDataProviding {
+public protocol ConnectedInsightsGatewayProtocol {
     func accessState() -> ConnectedInsightsAccessState
     func setup(facebookToken: String) async throws
     func reset()
+    func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost]
+    func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile
 
-    // TODO: func businessDiscoveryURL(account: String) -> String?
-    // Builds a Graph API URL for fetching a competitor account's public Instagram data
-    // via Meta's business_discovery field. Needs live testing against the API before
-    // being made public — the endpoint behaviour has not been verified.
+    // TODO: func businessDiscovery(account: String) async throws -> Profile
+    // Fetches a competitor account's public Instagram data via Meta's business_discovery
+    // field. Needs live testing against the API before being made public.
+}
+
+public extension ConnectedInsightsGatewayProtocol {
+    func loadProfileForAnalytics() async throws -> Profile {
+        try await loadProfileForAnalytics(mediaLimit: nil)
+    }
 }
 
 @MainActor
@@ -71,10 +59,10 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private let accountResolver: InstagramGraphAccountResolver
 
     public convenience init(
-        settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings(),
         configuration: ConnectedInsightsConfiguration = .production,
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
+        let settings = UserDefaultsConnectedInsightsSettings()
         let credentialsProvider = SettingsInstagramGraphCredentialsProvider(
             settings: settings,
             tokenProvider: tokenProvider
@@ -155,25 +143,6 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
             return .needsSetup(.missingInstagramBusinessAccountId)
         }
 
-        return .ready(ConnectedInsightsSession(
-            facebookToken: facebookToken,
-            instagramBusinessAccountId: instagramBusinessAccountId
-        ))
-    }
-}
-
-public struct UnavailableHashtagProvider: HashtagSearchProviding {
-    public init() {}
-
-    public func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
-        throw ConnectedInsightsError.dataProviderUnavailable
-    }
-}
-
-public struct UnavailableProfileProvider: ProfileDataProviding {
-    public init() {}
-
-    public func loadProfileForAnalytics(mediaLimit: Int? = nil) async throws -> Profile {
-        throw ConnectedInsightsError.dataProviderUnavailable
+        return .ready
     }
 }

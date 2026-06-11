@@ -34,9 +34,8 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         )
 
         switch sut.accessState() {
-        case .ready(let session):
-            XCTAssertEqual(session.facebookToken, "provider-token")
-            XCTAssertEqual(session.instagramBusinessAccountId, "ig-business-id")
+        case .ready:
+            break
         case .needsSetup(let error):
             XCTFail("Expected ready state, got setup error: \(error)")
         }
@@ -62,9 +61,8 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         let sut = makeGateway(settings: settings)
 
         switch sut.accessState() {
-        case .ready(let session):
-            XCTAssertEqual(session.facebookToken, "facebook-token")
-            XCTAssertEqual(session.instagramBusinessAccountId, "ig-business-id")
+        case .ready:
+            break
         case .needsSetup(let error):
             XCTFail("Expected ready state, got setup error: \(error)")
         }
@@ -436,22 +434,6 @@ func testAccountResolver_whenNoPageHasInstagramAccountReturnsMissingCredentials(
         }
     }
 
-    func testUnavailableProvidersReturnUnavailableError() async throws {
-        do {
-            _ = try await UnavailableHashtagProvider().searchHashtag(searchedHashtag: "travel")
-            XCTFail("Expected unavailable provider failure")
-        } catch {
-            XCTAssertEqual(error.localizedDescription, ConnectedInsightsError.dataProviderUnavailable.localizedDescription)
-        }
-
-        do {
-            _ = try await UnavailableProfileProvider().loadProfileForAnalytics(mediaLimit: nil)
-            XCTFail("Expected unavailable provider failure")
-        } catch {
-            XCTAssertEqual(error.localizedDescription, ConnectedInsightsError.dataProviderUnavailable.localizedDescription)
-        }
-    }
-
     private func makeGateway(
         settings: FakeConnectedInsightsSettings,
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
@@ -529,6 +511,6 @@ private struct FakeHashtagProvider: HashtagSearchProviding {
 
 private struct FakeProfileProvider: ProfileDataProviding {
     func loadProfileForAnalytics(mediaLimit: Int?) async throws -> Profile {
-        throw ConnectedInsightsError.dataProviderUnavailable
+        throw InstagramGraphServiceError.emptyResponse
     }
 }
