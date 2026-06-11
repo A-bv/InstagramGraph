@@ -59,18 +59,19 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     private let accountResolver: InstagramGraphAccountResolver
 
     public convenience init(
-        configuration: ConnectedInsightsConfiguration = .production
+        configuration: ConnectedInsightsConfiguration = .production,
+        tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
         let settings = UserDefaultsConnectedInsightsSettings()
         let credentialsProvider = SettingsInstagramGraphCredentialsProvider(
             settings: settings,
-            tokenProvider: nil
+            tokenProvider: tokenProvider
         )
         let endpointBuilder = InstagramGraphEndpointBuilder(apiGraphVersion: configuration.graphAPIVersion)
         let client = InstagramGraphClient(apiGraphVersion: configuration.graphAPIVersion)
         self.init(
             settings: settings,
-            tokenProvider: nil,
+            tokenProvider: tokenProvider,
             hashtagProvider: InstagramHashtagRepository(
                 credentialsProvider: credentialsProvider,
                 endpointBuilder: endpointBuilder,
@@ -110,6 +111,7 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
     public func setup(facebookToken: String) async throws {
         do {
             let account = try await accountResolver.resolveAccount(facebookToken: facebookToken)
+            settings.facebookToken = facebookToken
             settings.instagramBusinessAccountId = account.instagramBusinessAccountId
             settings.isCorrectSetup = true
         } catch {

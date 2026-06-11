@@ -70,6 +70,69 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         }
     }
 
+    // MARK: - Setup
+
+    private let meAccountsResponse = """
+    {
+      "data": [
+        {
+          "id": "page-id",
+          "name": "PackTags",
+          "instagram_business_account": { "id": "ig-business-id", "username": "packtags" }
+        }
+      ]
+    }
+    """.data(using: .utf8)!
+
+    /// Regression test: setup() must persist the token it was handed.
+    /// Version 3.0.0 stored only the business id, so accessState() returned
+    /// missingFacebookToken right after a successful login — an endless
+    /// login loop in the app.
+    func testSetup_onSuccess_persistsCredentialsAndBecomesReady() async throws {
+        let settings = FakeConnectedInsightsSettings(isCorrectSetup: false)
+        let resolver = InstagramGraphAccountResolver(
+            client: FakeInstagramGraphClient(responses: [.success(meAccountsResponse)])
+        )
+        let sut = ConnectedInsightsGateway(
+            settings: settings,
+            hashtagProvider: FakeHashtagProvider(),
+            profileProvider: FakeProfileProvider(),
+            accountResolver: resolver
+        )
+
+        try await sut.setup(facebookToken: "fresh-token")
+
+        XCTAssertEqual(settings.facebookToken, "fresh-token")
+        XCTAssertEqual(settings.instagramBusinessAccountId, "ig-business-id")
+        XCTAssertTrue(settings.isCorrectSetup)
+        switch sut.accessState() {
+        case .ready:
+            break
+        case .needsSetup(let error):
+            XCTFail("Setup must leave the gateway ready without an external token provider — got \(error)")
+        }
+    }
+
+    func testSetup_onResolutionFailure_marksSetupIncorrectAndThrows() async {
+        let settings = FakeConnectedInsightsSettings(isCorrectSetup: true)
+        let resolver = InstagramGraphAccountResolver(
+            client: FakeInstagramGraphClient(responses: [.failure(InstagramGraphServiceError.instagramAccountNotFound)])
+        )
+        let sut = ConnectedInsightsGateway(
+            settings: settings,
+            hashtagProvider: FakeHashtagProvider(),
+            profileProvider: FakeProfileProvider(),
+            accountResolver: resolver
+        )
+
+        do {
+            try await sut.setup(facebookToken: "fresh-token")
+            XCTFail("Expected setup to throw")
+        } catch {
+            XCTAssertFalse(settings.isCorrectSetup)
+        }
+    }
+
     // MARK: - Credentials Provider
 
     func testCredentialsProvider_whenCredentialsExist_returnsValidCredentials() throws {
@@ -177,7 +240,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
 
     // MARK: - Gateway Setup
 
-    func testGatewaySetup_whenAccountResolutionSucceeds_storesOnlyInstagramAccount() async throws {
+    func testGatewaySetup_whenAccountResolutionSucceeds_persistsTokenAndInstagramAccount() async throws {
         let response = """
         {
           "data": [
@@ -202,7 +265,7 @@ final class ConnectedInsightsGraphTests: XCTestCase {
 
         try await sut.setup(facebookToken: "setup-token")
 
-        XCTAssertNil(settings.facebookToken)
+        XCTAssertEqual(settings.facebookToken, "setup-token")
         XCTAssertEqual(settings.instagramBusinessAccountId, "ig-business-id")
         XCTAssertTrue(settings.isCorrectSetup)
     }
