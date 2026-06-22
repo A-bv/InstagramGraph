@@ -6,18 +6,17 @@ It takes a valid Meta token as input and outputs hashtag media or Instagram prof
 
 Note: get the Meta token in your app with [Facebook Login for iOS](https://developers.facebook.com/docs/facebook-login/ios), or generate one manually with [Live Meta Tests](#live-meta-tests).
 
+## Requirements
+iOS 15 · macOS 12 · Swift 5.9
+
 ## Installation
-
-Add the package with Swift Package Manager:
-
-```text
-https://github.com/A-bv/InstagramGraph
+```swift
+.package(url: "https://github.com/A-bv/InstagramGraph", from: "3.0.2")
 ```
 
 > Targets **Meta Graph API v23.0**. Pass a custom `ConnectedInsightsConfiguration` to override the version.
 
 ## Usage
-
 ```swift
 import InstagramGraph
 
@@ -28,7 +27,6 @@ try await gateway.setup(facebookToken: metaToken)
 ```
 
 Then check the gateway state before making calls:
-
 ```swift
 switch gateway.accessState() {
 case .ready:
@@ -41,18 +39,10 @@ case .needsSetup(let error):
 
 `mediaLimit` is optional. Omit it to load all available media.
 
-## Getting Started
-
-```sh
-open Package.swift
-```
-
 ## Live Meta Tests
-
 Requires a valid token from [Meta Graph API Explorer](https://developers.facebook.com/tools/explorer/).
 
 ```sh
-cd /path/to/InstagramGraph
 META_GRAPH_TOKEN="..." swift test --filter MetaLiveTests
 ```
 
@@ -62,6 +52,4 @@ Or, to test a specific hashtag:
 META_GRAPH_TOKEN="..." META_TEST_HASHTAG="cars" swift test --filter MetaLiveTests
 ```
 
-Default hashtag: `travel`. Meta limits hashtag search to 30 unique hashtags per 7 days.
-
-Do not commit tokens or account secrets.
+Default hashtag: `travel`. Meta limits hashtag search to 30 unique hashtags per 7 days. Do not commit tokens or account secrets.
