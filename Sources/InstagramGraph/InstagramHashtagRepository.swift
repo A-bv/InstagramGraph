@@ -16,11 +16,16 @@ final class InstagramHashtagRepository: HashtagSearchProviding, Sendable {
     }
 
     func searchHashtag(searchedHashtag: String) async throws -> [InstagramPost] {
-        let mediaSearchURL = try await findHashtagURL(searchedHashtag: searchedHashtag)
+        // A hashtag with no match is "no results", not an error — return an empty list so
+        // callers can show a "check your entry" state, distinct from a thrown failure
+        // (network / server) that warrants a retry.
+        guard let mediaSearchURL = try await findHashtagURL(searchedHashtag: searchedHashtag) else {
+            return []
+        }
         return try await getMedia(for: mediaSearchURL)
     }
 
-    private func findHashtagURL(searchedHashtag: String) async throws -> String {
+    private func findHashtagURL(searchedHashtag: String) async throws -> String? {
         let credentials = try credentialsProvider.validCredentials().get()
         guard let searchURL = endpointBuilder.hashtagSearchURL(
             searchedHashtag: searchedHashtag,
@@ -33,16 +38,15 @@ final class InstagramHashtagRepository: HashtagSearchProviding, Sendable {
         return try resolveMediaSearchURL(from: data, credentials: credentials)
     }
 
+    /// Resolves the media-search URL for the matched hashtag, or `nil` when the search
+    /// decoded successfully but matched no hashtag (i.e. the term doesn't exist).
     private func resolveMediaSearchURL(
         from data: Data,
         credentials: InstagramGraphCredentials
-    ) throws -> String {
+    ) throws -> String? {
         let response = try JSONDecoder().decode(HashtagIdResponse.self, from: data)
         guard let id = response.data.first?.id else {
-            throw InstagramGraphServiceError.decodingFailed(
-                type: String(describing: HashtagIdResponse.self),
-                body: InstagramGraphLogger.responsePreview(data)
-            )
+            return nil
         }
         guard let mediaSearchURL = endpointBuilder.hashtagMediaSearchURL(
             hashtagID: id,

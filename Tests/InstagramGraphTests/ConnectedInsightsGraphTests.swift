@@ -536,6 +536,28 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertEqual(mediaUrl.absoluteString, "https://example.com/image.jpg")
     }
 
+    func testHashtagRepository_whenHashtagNotFound_returnsEmptyResultWithoutError() async throws {
+        // The hashtag search decodes fine but matches nothing — that's "no results", not an
+        // error, so no media lookup follows and an empty list is returned.
+        let client = FakeInstagramGraphClient(responses: [
+            .success(#"{"data":[]}"#.data(using: .utf8)!)
+        ])
+        let sut = InstagramHashtagRepository(
+            credentialsProvider: FakeInstagramGraphCredentialsProvider(
+                facebookToken: "facebook-token",
+                instagramBusinessAccountId: "ig-business-id"
+            ),
+            endpointBuilder: InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion),
+            client: client
+        )
+
+        let posts = try await sut.searchHashtag(searchedHashtag: "nonexistenthashtag")
+
+        XCTAssertTrue(posts.isEmpty)
+        XCTAssertEqual(client.requestedURLs.count, 1)
+        XCTAssertTrue(client.requestedURLs[0].contains("ig_hashtag_search"))
+    }
+
     func testHashtagRepository_whenTopMediaReturns500_propagatesError() async throws {
         let reduceDataError: Result<Data, Error> = .failure(InstagramGraphServiceError.graphHTTPError(
             statusCode: 500,
