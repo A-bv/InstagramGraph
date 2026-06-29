@@ -59,14 +59,13 @@ final class InstagramHashtagRepository: HashtagSearchProviding, Sendable {
 
     private func getMedia(for url: String) async throws -> [InstagramPost] {
         let data = try await client.fetchGraphData(from: url)
-        guard let media = try? JSONDecoder.instagram().decode(Media.self, from: data) else {
-            let error = InstagramGraphServiceError.decodingFailed(
-                type: String(describing: Media.self),
-                body: InstagramGraphLogger.responsePreview(data)
-            )
-            InstagramGraphLogger.logFailure(error, url: url)
-            throw error
+        do {
+            let media = try JSONDecoder.instagram().decode(Media.self, from: data)
+            return media.data
+        } catch {
+            let serviceError = instagramDecodingFailed(type: Media.self, data: data, underlying: error)
+            InstagramGraphLogger.logFailure(serviceError, url: url)
+            throw serviceError
         }
-        return media.data
     }
 }

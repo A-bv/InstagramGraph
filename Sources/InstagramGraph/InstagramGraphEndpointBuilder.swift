@@ -2,7 +2,7 @@ import Foundation
 
 struct InstagramGraphEndpointBuilder: Sendable {
     private let apiGraphVersion: String
-    private let baseURL = "https://graph.facebook.com"
+    private let host = "graph.facebook.com"
 
     init(apiGraphVersion: String = ConnectedInsightsConfiguration.production.graphAPIVersion) {
         self.apiGraphVersion = apiGraphVersion
@@ -12,8 +12,11 @@ struct InstagramGraphEndpointBuilder: Sendable {
         searchedHashtag: String,
         credentials: InstagramGraphCredentials
     ) -> String? {
-        let url = "\(baseURL)/\(apiGraphVersion)/ig_hashtag_search?user_id=\(credentials.instagramBusinessAccountId)&q=\(searchedHashtag)&access_token=\(credentials.facebookToken)"
-        return encoded(url)
+        url(path: "ig_hashtag_search", queryItems: [
+            ("user_id", value(credentials.instagramBusinessAccountId)),
+            ("q", value(searchedHashtag)),
+            ("access_token", value(credentials.facebookToken)),
+        ])
     }
 
     func hashtagMediaSearchURL(
@@ -21,7 +24,6 @@ struct InstagramGraphEndpointBuilder: Sendable {
         credentials: InstagramGraphCredentials
     ) -> String? {
         let limit = "5"
-        let mediaType = "top_media"
         let fields = [
             "caption",
             "comments_count",
@@ -32,9 +34,12 @@ struct InstagramGraphEndpointBuilder: Sendable {
             "id"
         ].joined(separator: ",")
 
-        let options = "\(mediaType)?fields=\(fields)&user_id=\(credentials.instagramBusinessAccountId)&limit=\(limit)"
-        let url = "\(baseURL)/\(apiGraphVersion)/\(hashtagID)/\(options)&access_token=\(credentials.facebookToken)"
-        return encoded(url)
+        return url(path: "\(hashtagID)/top_media", queryItems: [
+            ("fields", fieldsValue(fields)),
+            ("user_id", value(credentials.instagramBusinessAccountId)),
+            ("limit", value(limit)),
+            ("access_token", value(credentials.facebookToken)),
+        ])
     }
 
     func analyticsProfileURL(
@@ -72,25 +77,58 @@ struct InstagramGraphEndpointBuilder: Sendable {
             "username",
             "website",
             mediaField
-        ]
+        ].joined(separator: ",")
 
-        let url = "\(baseURL)/\(apiGraphVersion)/\(credentials.instagramBusinessAccountId)?fields=\(fields.joined(separator: ","))&access_token=\(credentials.facebookToken)"
-        return encoded(url)
+        return url(path: credentials.instagramBusinessAccountId, queryItems: [
+            ("fields", fieldsValue(fields)),
+            ("access_token", value(credentials.facebookToken)),
+        ])
     }
 
+    // Staged for the `businessDiscovery` feature on `ConnectedInsightsGatewayProtocol`; not yet
+    // wired into a public call. `account` is interpolated into the `fields` expression, so it must
+    // be validated by the caller before this is exposed.
     func businessDiscoveryURL(
         account: String,
         credentials: InstagramGraphCredentials
     ) -> String? {
         let limit = 12
-        let url = "\(baseURL)/\(apiGraphVersion)/\(credentials.instagramBusinessAccountId)?fields=business_discovery.username(\(account)){biography,name,followers_count,follows_count,id,ig_id,media_count,profile_picture_url,username,website,media.limit(\(limit)){media_type,caption,timestamp,media_url,comments_count,username,like_count}}&access_token=\(credentials.facebookToken)"
-        return encoded(url)
+        let fields = "business_discovery.username(\(account)){biography,name,followers_count,follows_count,id,ig_id,media_count,profile_picture_url,username,website,media.limit(\(limit)){media_type,caption,timestamp,media_url,comments_count,username,like_count}}"
+        return url(path: credentials.instagramBusinessAccountId, queryItems: [
+            ("fields", fieldsValue(fields)),
+            ("access_token", value(credentials.facebookToken)),
+        ])
     }
 
-    private func encoded(_ url: String) -> String? {
-        guard let encodedUrl = url.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
-            return nil
+    private func url(path: String, queryItems: [(name: String, value: String)]) -> String? {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = host
+        components.path = "/\(apiGraphVersion)/\(path)"
+        components.percentEncodedQueryItems = queryItems.map {
+            URLQueryItem(name: $0.name, value: $0.value)
         }
-        return encodedUrl.replacingOccurrences(of: ",", with: "%2C")
+        return components.url?.absoluteString
     }
+
+    /// Strict percent-encoding for an individual query value. Encoding everything outside the
+    /// unreserved set keeps user input (a hashtag, an account name) from breaking out of its
+    /// parameter — `URLComponents` alone leaves `+` untouched and would let `&`/`=` injection
+    /// slip through structural assembly.
+    private func value(_ raw: String) -> String {
+        raw.addingPercentEncoding(withAllowedCharacters: Self.valueAllowed) ?? raw
+    }
+
+    /// Encoding for Graph field expressions, whose parentheses and dots must reach the server
+    /// intact while braces, spaces and commas are percent-encoded.
+    private func fieldsValue(_ raw: String) -> String {
+        let encoded = raw.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? raw
+        return encoded.replacingOccurrences(of: ",", with: "%2C")
+    }
+
+    private static let valueAllowed: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-._~")
+        return set
+    }()
 }

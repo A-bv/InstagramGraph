@@ -140,6 +140,8 @@ public struct PostInsights: Hashable, Decodable {
     public let data: [InsightMetric]
 }
 
+// Staged for the `businessDiscovery` feature (see ConnectedInsightsGatewayProtocol); the response
+// model is ready but not yet decoded by any public call.
 struct Discovery: Hashable, Decodable {
     let businessDiscovery: Profile?
 

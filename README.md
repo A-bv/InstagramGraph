@@ -19,7 +19,7 @@ iOS 15 · macOS 12 · Swift 5.9
 ## Installation
 Swift package manager: https://github.com/A-bv/InstagramGraph
 ```swift
-.package(url: "https://github.com/A-bv/InstagramGraph", from: "3.0.2")
+.package(url: "https://github.com/A-bv/InstagramGraph", from: "3.1.0")
 ```
 
 > Targets **Meta Graph API v23.0**.
@@ -47,7 +47,12 @@ case .needsSetup(let error):
 
 `mediaLimit` is optional. Use it to cap the number of recent media items returned for analytics.
 
-Setup and API calls are `async throws`; Meta HTTP errors and decoding errors are surfaced to help debug API changes.
+The token must carry the `instagram_basic`, `instagram_manage_insights`, and `pages_show_list` permissions.
+
+Setup and API calls are `async throws`; Meta HTTP errors and decoding errors are surfaced (as `InstagramGraphServiceError`) to help debug API changes.
+
+## Credentials & security
+`setup(facebookToken:)` stores the Meta token and resolved Instagram business-account id in the **Keychain** (accessible after first unlock, not synced or backed up); they survive app restarts, so you only call `setup` once after login. Credentials persisted by versions ≤ 3.0.2 in `UserDefaults` are migrated into the Keychain automatically. Call `reset()` to clear them. If you'd rather keep the token entirely in your own store, inject an `InstagramGraphAccessTokenProviding` via `ConnectedInsightsGateway(tokenProvider:)` and it won't be persisted by the package.
 
 ## Live Meta Tests
 Requires a valid token from [Meta Graph API Explorer](https://developers.facebook.com/tools/explorer/).

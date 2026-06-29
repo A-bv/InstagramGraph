@@ -58,7 +58,7 @@ protocol ProfileDataProviding: Sendable {
 /// }
 /// ```
 ///
-/// Credentials are persisted in `UserDefaults` and survive app restarts.
+/// Credentials are persisted securely in the Keychain and survive app restarts.
 @MainActor
 public protocol ConnectedInsightsGatewayProtocol {
     /// Returns whether the gateway has valid credentials and is ready for data calls.
@@ -118,7 +118,7 @@ public final class ConnectedInsightsGateway: ConnectedInsightsGatewayProtocol {
         configuration: ConnectedInsightsConfiguration = .production,
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
-        let settings = UserDefaultsConnectedInsightsSettings()
+        let settings = KeychainConnectedInsightsSettings()
         let credentialsProvider = SettingsInstagramGraphCredentialsProvider(
             settings: settings,
             tokenProvider: tokenProvider

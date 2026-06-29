@@ -26,15 +26,12 @@ final class InstagramProfileRepository: ProfileDataProviding, Sendable {
 
         let data = try await client.fetchGraphData(from: encodedUrl)
 
-        guard let profile = try? JSONDecoder.instagram().decode(Profile.self, from: data) else {
-            let error = InstagramGraphServiceError.decodingFailed(
-                type: String(describing: Profile.self),
-                body: InstagramGraphLogger.responsePreview(data)
-            )
-            InstagramGraphLogger.logFailure(error, url: encodedUrl)
-            throw error
+        do {
+            return try JSONDecoder.instagram().decode(Profile.self, from: data)
+        } catch {
+            let serviceError = instagramDecodingFailed(type: Profile.self, data: data, underlying: error)
+            InstagramGraphLogger.logFailure(serviceError, url: encodedUrl)
+            throw serviceError
         }
-
-        return profile
     }
 }

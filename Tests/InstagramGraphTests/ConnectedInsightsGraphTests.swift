@@ -70,6 +70,22 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         }
     }
 
+    func testReset_clearsAllStoredCredentials() {
+        let settings = FakeConnectedInsightsSettings(
+            isCorrectSetup: true,
+            facebookToken: "facebook-token",
+            instagramBusinessAccountId: "ig-business-id"
+        )
+        let sut = makeGateway(settings: settings)
+
+        sut.reset()
+
+        XCTAssertNil(settings.facebookToken)
+        XCTAssertNil(settings.instagramBusinessAccountId)
+        XCTAssertFalse(settings.isCorrectSetup)
+        assertNeedsSetup(sut.accessState(), .setupRequired)
+    }
+
     // MARK: - Setup
 
     private let meAccountsResponse = """
@@ -394,6 +410,25 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         XCTAssertTrue(url.contains("access_token=token%20value"))
     }
 
+    func testEndpointBuilder_hashtagSearchURL_encodesInjectionCharactersInQuery() throws {
+        let sut = InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion)
+        let credentials = InstagramGraphCredentials(
+            facebookToken: "facebook-token",
+            instagramBusinessAccountId: "1789"
+        )
+
+        // A hashtag carrying query-control characters must stay inside the `q` value and
+        // never inject extra parameters such as access_token.
+        let url = try XCTUnwrap(sut.hashtagSearchURL(
+            searchedHashtag: "travel&access_token=attacker+x",
+            credentials: credentials
+        ))
+
+        XCTAssertTrue(url.contains("q=travel%26access_token%3Dattacker%2Bx"))
+        XCTAssertTrue(url.contains("access_token=facebook-token"))
+        XCTAssertFalse(url.contains("access_token=attacker"))
+    }
+
     func testEndpointBuilder_hashtagMediaURL_containsOnlyFieldsUsedByPackTags() throws {
         let sut = InstagramGraphEndpointBuilder(apiGraphVersion: productionGraphAPIVersion)
         let credentials = InstagramGraphCredentials(
@@ -709,6 +744,84 @@ final class ConnectedInsightsGraphTests: XCTestCase {
         }
     }
 
+    // MARK: - Keychain Settings
+
+    func testKeychainSettings_storesCredentialsInKeychainNotUserDefaults() {
+        let defaults = makeEphemeralDefaults()
+        let keychain = FakeKeychainStore()
+        let sut = KeychainConnectedInsightsSettings(defaults: defaults, keychain: keychain)
+
+        sut.facebookToken = "secret-token"
+        sut.instagramBusinessAccountId = "ig-business-id"
+        sut.isCorrectSetup = true
+
+        XCTAssertEqual(sut.facebookToken, "secret-token")
+        XCTAssertEqual(sut.instagramBusinessAccountId, "ig-business-id")
+        XCTAssertTrue(sut.isCorrectSetup)
+        // The sensitive values live in the Keychain, never in UserDefaults.
+        XCTAssertEqual(keychain.string(forKey: "fbToken"), "secret-token")
+        XCTAssertNil(defaults.string(forKey: "fbToken"))
+        XCTAssertNil(defaults.string(forKey: "IgBId"))
+    }
+
+    func testKeychainSettings_settingNilDeletesKeychainValue() {
+        let keychain = FakeKeychainStore()
+        let sut = KeychainConnectedInsightsSettings(defaults: makeEphemeralDefaults(), keychain: keychain)
+        sut.facebookToken = "secret-token"
+
+        sut.facebookToken = nil
+
+        XCTAssertNil(sut.facebookToken)
+        XCTAssertNil(keychain.string(forKey: "fbToken"))
+    }
+
+    func testKeychainSettings_migratesLegacyUserDefaultsCredentialsIntoKeychain() {
+        let defaults = makeEphemeralDefaults()
+        defaults.set("legacy-token", forKey: "fbToken")
+        defaults.set("legacy-ig-id", forKey: "IgBId")
+        let keychain = FakeKeychainStore()
+
+        let sut = KeychainConnectedInsightsSettings(defaults: defaults, keychain: keychain)
+
+        XCTAssertEqual(sut.facebookToken, "legacy-token")
+        XCTAssertEqual(sut.instagramBusinessAccountId, "legacy-ig-id")
+        // The plaintext copies are removed once migrated.
+        XCTAssertNil(defaults.string(forKey: "fbToken"))
+        XCTAssertNil(defaults.string(forKey: "IgBId"))
+    }
+
+    func testKeychainSettings_migrationKeepsPlaintextWhenKeychainWriteFails() {
+        // A failed Keychain write must not destroy the only copy of the credential: the
+        // plaintext stays in UserDefaults so migration can be retried on the next launch.
+        let defaults = makeEphemeralDefaults()
+        defaults.set("legacy-token", forKey: "fbToken")
+        let keychain = FakeKeychainStore(failWrites: true)
+
+        let sut = KeychainConnectedInsightsSettings(defaults: defaults, keychain: keychain)
+
+        XCTAssertEqual(defaults.string(forKey: "fbToken"), "legacy-token")
+        XCTAssertNil(sut.facebookToken)
+    }
+
+    func testKeychainSettings_migrationDoesNotOverwriteExistingKeychainValue() {
+        let defaults = makeEphemeralDefaults()
+        defaults.set("legacy-token", forKey: "fbToken")
+        let keychain = FakeKeychainStore()
+        keychain.set("current-token", forKey: "fbToken")
+
+        let sut = KeychainConnectedInsightsSettings(defaults: defaults, keychain: keychain)
+
+        XCTAssertEqual(sut.facebookToken, "current-token")
+        XCTAssertNil(defaults.string(forKey: "fbToken"))
+    }
+
+    private func makeEphemeralDefaults() -> UserDefaults {
+        let suiteName = "KeychainSettingsTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+        return defaults
+    }
+
     // MARK: - Helpers
 
     private func makeGateway(
@@ -761,6 +874,29 @@ private struct FakeInstagramGraphCredentialsProvider: InstagramGraphCredentialsP
 
 private struct FakeAccessTokenProvider: InstagramGraphAccessTokenProviding {
     let facebookToken: String?
+}
+
+private final class FakeKeychainStore: KeychainStoring, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [String: String] = [:]
+    private let failWrites: Bool
+
+    init(failWrites: Bool = false) {
+        self.failWrites = failWrites
+    }
+
+    func string(forKey key: String) -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return storage[key]
+    }
+
+    @discardableResult
+    func set(_ value: String?, forKey key: String) -> Bool {
+        lock.lock(); defer { lock.unlock() }
+        if failWrites { return false }
+        storage[key] = value
+        return true
+    }
 }
 
 private final class FakeInstagramGraphClient: InstagramGraphClientProtocol, @unchecked Sendable {

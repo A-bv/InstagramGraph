@@ -35,7 +35,7 @@ final class SettingsInstagramGraphCredentialsProvider: InstagramGraphCredentials
     private let tokenProvider: (any InstagramGraphAccessTokenProviding)?
 
     init(
-        settings: any ConnectedInsightsSettingsProtocol = UserDefaultsConnectedInsightsSettings(),
+        settings: any ConnectedInsightsSettingsProtocol = KeychainConnectedInsightsSettings(),
         tokenProvider: (any InstagramGraphAccessTokenProviding)? = nil
     ) {
         self.settings = settings

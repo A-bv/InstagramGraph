@@ -98,6 +98,44 @@ final class InstagramGraphClient: InstagramGraphClientProtocol, Sendable {
     }
 }
 
+/// Builds a ``InstagramGraphServiceError/decodingFailed(type:body:)`` that names the failing key
+/// or type — the most useful detail when Meta changes the response schema — alongside a redacted
+/// preview of the body.
+func instagramDecodingFailed(type: Any.Type, data: Data, underlying: Error) -> InstagramGraphServiceError {
+    let preview = InstagramGraphLogger.responsePreview(data)
+    let body: String
+    if let decodingError = underlying as? DecodingError {
+        body = "\(decodingError.instagramSummary) — \(preview)"
+    } else {
+        body = preview
+    }
+    return .decodingFailed(type: String(describing: type), body: body)
+}
+
+extension DecodingError {
+    /// A concise, log-safe summary naming the failing coding path and reason.
+    var instagramSummary: String {
+        switch self {
+        case let .keyNotFound(key, context):
+            return "missing key '\(key.stringValue)' at \(context.codingPath.instagramPath)"
+        case let .typeMismatch(type, context):
+            return "type mismatch for \(type) at \(context.codingPath.instagramPath)"
+        case let .valueNotFound(type, context):
+            return "missing value for \(type) at \(context.codingPath.instagramPath)"
+        case let .dataCorrupted(context):
+            return "data corrupted at \(context.codingPath.instagramPath): \(context.debugDescription)"
+        @unknown default:
+            return "decoding failed"
+        }
+    }
+}
+
+private extension [CodingKey] {
+    var instagramPath: String {
+        isEmpty ? "<root>" : map(\.stringValue).joined(separator: ".")
+    }
+}
+
 enum InstagramGraphLogRedactor {
     static func redacted(_ value: String) -> String {
         value.replacingOccurrences(
