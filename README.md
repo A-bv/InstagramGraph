@@ -68,3 +68,10 @@ META_GRAPH_TOKEN="..." META_TEST_HASHTAG="cars" swift test --filter MetaLiveTest
 ```
 
 Default hashtag: `travel`. Meta limits hashtag search to 30 unique hashtags per 7 days. Do not commit tokens or account secrets.
+
+### Live Keychain Tests
+Verifies credential storage against the real system Keychain (the unit tests use an in-memory fake). Gated separately because Keychain access can be unavailable in headless CI:
+
+```sh
+RUN_KEYCHAIN_LIVE=1 swift test --filter KeychainStoreLiveTests
+```
